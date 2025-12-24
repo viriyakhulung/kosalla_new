@@ -2,15 +2,17 @@ import { Suspense } from "react";
 import LoginForm from "./login-form";
 
 export const metadata = {
-  title: "Login - Kosalla Ticketing System",
+  title: "Sign In | Kosalla Ticketing System",
+  description: "Sign in to your Kosalla account to access the ticketing system",
 };
 
 function LoadingFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading login page...</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-slate-50 to-teal-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg p-8 text-center border border-primary/10 dark:border-primary/20">
+        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-foreground font-medium">Preparing your login...</p>
+        <p className="text-muted-foreground text-sm mt-1">This should only take a moment</p>
       </div>
     </div>
   );
