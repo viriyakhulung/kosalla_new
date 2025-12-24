@@ -107,27 +107,33 @@ export default async function AdminPage() {
 
   return (
     <AuthGuard user={user} requiredRoles={["super-admin"]}>
-      <div className="space-y-10">
+      <div className="space-y-12">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Admin Dashboard</h1>
-          <p className="text-slate-600 mt-2">
-            Welcome, {user?.name}! Manage Kosalla system from here.
+        <div className="space-y-3">
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-4xl font-bold text-foreground">Admin Dashboard</h1>
+            <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">Super Admin</span>
+          </div>
+          <p className="text-lg text-muted-foreground max-w-2xl">
+            Welcome back, <span className="font-semibold text-foreground">{user?.name}</span>! Manage and configure all aspects of the Kosalla system.
           </p>
         </div>
 
-        {/* Setup Eksternal */}
-        <section>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              📤 Setup Eksternal (For External)
-            </h2>
-            <p className="text-slate-600 text-sm mt-1">
-              Configure user accounts, organizations, locations, inventory, and contracts
+        {/* External Setup Section */}
+        <section className="space-y-6">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-2xl">📤</div>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">External Configuration</h2>
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm ml-11">
+              Configure user accounts, organizations, locations, inventory, and contracts for external clients
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {externalSetupItems.map((item) => (
               <MenuCard
                 key={item.href}
@@ -140,20 +146,24 @@ export default async function AdminPage() {
           </div>
         </section>
 
-        <hr className="border-slate-200" />
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent"></div>
 
-        {/* Setup Internal */}
-        <section>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              ⚙️ Setup Internal (For Internal)
-            </h2>
-            <p className="text-slate-600 text-sm mt-1">
-              Add engineers, setup team groups and assign team members with roles
+        {/* Internal Setup Section */}
+        <section className="space-y-6">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-2xl">⚙️</div>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">Internal Configuration</h2>
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm ml-11">
+              Manage engineers, setup team groups, and assign team members with appropriate roles
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {internalSetupItems.map((item) => (
               <MenuCard
                 key={item.href}
@@ -166,27 +176,33 @@ export default async function AdminPage() {
           </div>
         </section>
 
-        {/* Ticketing */}
-        <section>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-              🎫 Ticketing System
-            </h2>
-            <p className="text-slate-600 text-sm mt-1">
-              View and manage all tickets in the system
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent"></div>
+
+        {/* Ticketing Section */}
+        <section className="space-y-6">
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="text-2xl">🎫</div>
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">Ticketing System</h2>
+              </div>
+            </div>
+            <p className="text-muted-foreground text-sm ml-11">
+              Monitor, manage, and generate reports on all tickets in the system
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <MenuCard
               title="🎫 All Tickets"
-              description="View and manage all tickets"
+              description="View, filter, and manage all support tickets"
               href="/admin/tickets"
               icon="🎫"
             />
             <MenuCard
               title="📊 Ticket Reports"
-              description="View ticket statistics and reports"
+              description="View detailed statistics and performance reports"
               href="/admin/tickets/reports"
               icon="📊"
             />
