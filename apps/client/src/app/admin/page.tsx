@@ -83,13 +83,24 @@ export default async function AdminPage() {
   }) => (
     <Link
       href={href}
-      className="block bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6 border-t-4 border-amber-500"
+      className="group relative bg-white dark:bg-slate-900 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border border-border dark:border-border/50 hover:border-primary/50 dark:hover:border-primary/50 overflow-hidden"
     >
-      <div className="text-4xl mb-3">{icon}</div>
-      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-      <p className="text-slate-600 text-sm mt-2">{description}</p>
-      <div className="mt-4 flex items-center text-amber-500 text-sm font-semibold">
-        Go →
+      {/* Background gradient accent */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+      {/* Content */}
+      <div className="relative z-10">
+        <div className="text-5xl mb-4 group-hover:scale-110 transition-transform duration-300 origin-left">{icon}</div>
+        <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors duration-300">{title}</h3>
+        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">{description}</p>
+
+        {/* Arrow indicator */}
+        <div className="mt-5 flex items-center text-primary text-sm font-semibold group-hover:translate-x-1 transition-transform duration-300">
+          <span>Manage</span>
+          <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
       </div>
     </Link>
   );
@@ -185,4 +196,3 @@ export default async function AdminPage() {
     </AuthGuard>
   );
 }
-
