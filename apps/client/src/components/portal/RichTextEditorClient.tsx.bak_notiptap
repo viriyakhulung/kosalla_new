@@ -1,0 +1,148 @@
+"use client";
+
+import React, { useEffect } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+
+type Props = {
+  value: string;
+  onChange: (html: string) => void;
+};
+
+export default function RichTextEditorClient({ value, onChange }: Props) {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: value || "<p></p>",
+    immediatelyRender: false, // ✅ fix SSR/hydration warning
+    onUpdate({ editor }) {
+      onChange(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class:
+          "h-[660px] overflow-y-auto w-full rounded border bg-white p-3 text-sm outline-none",
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+
+        // Check for image in clipboard
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf("image") === 0) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64 = e.target?.result as string;
+                if (base64) {
+                  // Insert image as HTML using native method
+                  const img = document.createElement("img");
+                  img.src = base64;
+                  img.style.maxWidth = "100%";
+                  img.style.height = "auto";
+                  img.style.margin = "10px 0";
+                  
+                  const div = document.createElement("div");
+                  div.appendChild(img);
+                  
+                  const htmlString = div.innerHTML;
+                  editor?.chain().focus().insertContent(htmlString).run();
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+            return true;
+          }
+        }
+        return false;
+      },
+    },
+  });
+
+  // Sync value from parent (tanpa argumen boolean)
+  useEffect(() => {
+    if (!editor) return;
+    const incoming = value || "<p></p>";
+    if (editor.getHTML() !== incoming) {
+      editor.commands.setContent(incoming);
+    }
+  }, [value, editor]);
+
+  if (!editor) {
+    return (
+      <div className="rounded border bg-white p-3 text-sm text-slate-500">
+        Loading editor...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2 rounded border bg-slate-50 p-2">
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+        >
+          Bold
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        >
+          Italic
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          Bullet
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
+          Numbered
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          Heading
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().undo().run()}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().redo().run()}
+        >
+          Redo
+        </button>
+      </div>
+
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+

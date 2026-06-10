@@ -1,0 +1,122 @@
+name: Deploy (production)
+
+# Jalan otomatis saat ada push/merge ke `main`.
+# Bisa juga dijalankan manual dari tab Actions (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy ke cPanel
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # URL publik produksi (frontend memanggil API ini dari browser)
+      NEXT_PUBLIC_API_BASE_URL: "https://api.kosalla.viriyadb.com/api"
+      NEXT_PUBLIC_API_URL: "https://api.kosalla.viriyadb.com"
+      # --- diisi dari GitHub Secrets ---
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ------------------------------------------------------
+      # 1) Build frontend DI GitHub (RAM aman, tidak membebani cPanel)
+      # ------------------------------------------------------
+      - name: Setup pnpm
+        if: env.SSH_HOST != ''
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+
+      - name: Setup Node 22
+        if: env.SSH_HOST != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install & build client
+        if: env.SSH_HOST != ''
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm -C apps/client build
+
+      # ------------------------------------------------------
+      # 2) Siapkan SSH
+      # ------------------------------------------------------
+      - name: Setup SSH key
+        if: env.SSH_HOST != ''
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${SSH_PORT:-22}" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # ------------------------------------------------------
+      # 3) Kirim kode + hasil build ke server (rsync)
+      #    --delete membersihkan file lama, tapi item ter-exclude
+      #    (.env, vendor, node_modules, storage) AMAN — tidak dihapus.
+      # ------------------------------------------------------
+      - name: Rsync ke server
+        if: env.SSH_HOST != ''
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_deploy -p ${SSH_PORT:-22}" \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '**/node_modules' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'kosalla-api/vendor' \
+            --exclude 'kosalla-api/storage' \
+            --exclude 'kosalla-api/public/storage' \
+            --exclude 'kosalla-api/bootstrap/cache' \
+            ./ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+
+      # ------------------------------------------------------
+      # 4) Jalankan langkah deploy di server
+      #    CATATAN: kalau composer/php/pnpm tidak ada di PATH SSH,
+      #    ganti dengan path absolutnya (lihat DEPLOY.md).
+      # ------------------------------------------------------
+      - name: Remote build & restart
+        if: env.SSH_HOST != ''
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+            set -e
+            cd "$DEPLOY_PATH"
+
+            echo "== Backend (Laravel) =="
+            cd kosalla-api
+            composer install --no-dev --optimize-autoloader --no-interaction
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan storage:link || true
+            cd ..
+
+            echo "== Frontend runtime deps (build sudah diupload) =="
+            pnpm install --prod --frozen-lockfile || pnpm install --prod
+
+            echo "== Restart Passenger (cPanel Node.js App) =="
+            mkdir -p tmp && touch tmp/restart.txt
+
+            echo "== Selesai =="
+          REMOTE
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Lewati (secrets belum diisi)
+        if: env.SSH_HOST == ''
+        run: echo "Secrets SSH belum diisi — deploy dilewati. Lihat DEPLOY.md untuk setup."

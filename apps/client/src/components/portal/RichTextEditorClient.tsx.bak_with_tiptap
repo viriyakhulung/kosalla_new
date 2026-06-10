@@ -1,0 +1,195 @@
+"use client";
+
+import React, { useEffect } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Underline from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
+
+type Props = {
+  value: string;
+  onChange: (html: string) => void;
+};
+
+export default function RichTextEditorClient({ value, onChange }: Props) {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+      }),
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+    ],
+    content: value || "<p></p>",
+    immediatelyRender: false, // ✅ fix SSR/hydration warning
+    onUpdate({ editor }) {
+      onChange(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class:
+          "h-[660px] overflow-y-auto w-full rounded border bg-white p-3 text-sm outline-none",
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+
+        // Check for image in clipboard
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.indexOf("image") === 0) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64 = e.target?.result as string;
+                if (base64 && editor) {
+                  editor.chain().focus().setImage({ src: base64 }).run();
+                }
+              };
+              reader.readAsDataURL(file);
+            }
+            return true;
+          }
+        }
+        return false;
+      },
+    },
+  });
+
+  // Sync value from parent (tanpa argumen boolean)
+  useEffect(() => {
+    if (!editor) return;
+    const incoming = value || "<p></p>";
+    if (editor.getHTML() !== incoming) {
+      editor.commands.setContent(incoming);
+    }
+  }, [value, editor]);
+
+  if (!editor) {
+    return (
+      <div className="rounded border bg-white p-3 text-sm text-slate-500">
+        Loading editor...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2 rounded border bg-slate-50 p-2">
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+        >
+          Bold
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+        >
+          Italic
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+        >
+          Underline
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().setTextAlign("left").run()}
+        >
+          Left
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().setTextAlign("center").run()}
+        >
+          Center
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().setTextAlign("right").run()}
+        >
+          Right
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        >
+          H3
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          Bullet
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        >
+          Numbered
+        </button>
+        
+        <div className="h-6 w-px bg-slate-300" />
+        
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().undo().run()}
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          className="rounded border bg-white px-2 py-1 text-xs"
+          onClick={() => editor.chain().focus().redo().run()}
+        >
+          Redo
+        </button>
+      </div>
+
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+

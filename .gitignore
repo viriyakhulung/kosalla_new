@@ -1,0 +1,72 @@
+# ============================================================
+# Dependencies
+# ============================================================
+node_modules/
+**/node_modules/
+
+# ============================================================
+# Build output
+# ============================================================
+.next/
+**/.next/
+out/
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# ============================================================
+# Laravel (kosalla-api)
+# ============================================================
+/kosalla-api/vendor/
+/kosalla-api/public/build/
+/kosalla-api/public/hot
+/kosalla-api/public/storage
+/kosalla-api/storage/*.key
+/kosalla-api/storage/pail
+/kosalla-api/storage/logs/*
+/kosalla-api/storage/framework/cache/data/*
+/kosalla-api/storage/framework/sessions/*
+/kosalla-api/storage/framework/views/*
+/kosalla-api/storage/framework/testing/*
+/kosalla-api/bootstrap/cache/*.php
+/kosalla-api/.phpunit.result.cache
+/kosalla-api/.phpunit.cache
+
+# ============================================================
+# Secrets / environment  (JANGAN PERNAH commit .env asli)
+# ============================================================
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# ============================================================
+# OS / Editor
+# ============================================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.fleet/
+.nova/
+.zed/
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+**/*.log
+
+# ============================================================
+# Artefak / sampah yang ikut terbawa dari server (bukan source code)
+# ============================================================
+abc.txt
+*.zip
+/tmp/
+/public/
+*.bak
+*.bak.*
+server.js.bak

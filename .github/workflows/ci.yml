@@ -1,0 +1,85 @@
+name: CI
+
+# Cek kualitas: jalan di setiap Pull Request dan setiap push
+# (kecuali ke main, karena main ditangani oleh deploy.yml yang sudah build sendiri).
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  # ----------------------------------------------------------
+  # Backend (Laravel) — install + cek sintaks PHP
+  # ----------------------------------------------------------
+  backend:
+    name: Backend (Laravel)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kosalla-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, intl, tokenizer, xml, ctype, json
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: kosalla-api/vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('kosalla-api/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: PHP syntax lint (php -l)
+        run: |
+          find app routes config database -name "*.php" -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Code style check (Pint) — informational
+        continue-on-error: true
+        run: vendor/bin/pint --test
+
+  # ----------------------------------------------------------
+  # Frontend (Next.js) — install + build (memastikan compile)
+  # ----------------------------------------------------------
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Nilai dummy; hanya untuk lolos build (akan dioverride .env di server)
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000/api"
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build client
+        run: pnpm -C apps/client build

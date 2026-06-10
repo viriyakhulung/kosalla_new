@@ -1,0 +1,421 @@
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { logout } from "@/lib/auth";
+import { ViriyaLogo } from "@/components/ViriyaLogo";
+
+type Ticket = {
+  id: number;
+  ticket_number: string;
+  subject: string;
+  status: string;
+  created_at: string;
+  description_html?: string | null;
+
+  category?: string | null;
+  priority?: string | null;
+  tagging_word?: string | null;
+
+  inventory_item?: { id: number; name: string } | null;
+  inventory_item_name?: string | null;
+  reporter_name?: string | null;
+  user?: { id: number; name?: string | null } | null;
+  creator?: { id: number; name?: string | null } | null;
+
+  attachments_count?: number;
+};
+
+type Paginated<T> = {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+
+  organization?: { id: number; name: string };
+  organizations?: Array<{ id: number; name: string }>;
+};
+
+// ✅ sesuai response AuthController@me => { user: userPayload(...) }
+type Me = {
+  id: number;
+  master_role_id?: number | null;
+  master_role?: string | null; // ✅ string (contoh: "viriyastaff")
+};
+
+function fmtDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+// ✅ role 2 = viriyastaff (hide create ticket)
+function isViriyaStaff(me: Me | null) {
+  const roleId = me?.master_role_id ?? null;
+  const roleName = String(me?.master_role ?? "").toLowerCase();
+  return roleId === 2 || roleName === "viriyastaff";
+}
+
+export default function TicketsPage() {
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<"all" | "open" | "closed">("all");
+
+  const [orgId, setOrgId] = useState<number | "">("");
+  const [orgName, setOrgName] = useState<string>("-");
+  const [orgOptions, setOrgOptions] = useState<Array<{ id: number; name: string }>>([]);
+
+  const [me, setMe] = useState<Me | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  // ✅ Pagination untuk tickets
+  const [perPage, setPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const didInitRef = useRef(false);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const qs = new URLSearchParams();
+      qs.set("per_page", String(perPage));
+      qs.set("page", String(currentPage));
+      if (status !== "all") qs.set("status", status);
+      if (q.trim()) qs.set("q", q.trim());
+      if (orgId !== "") qs.set("org_id", String(orgId));
+
+      const json = await apiFetch<Paginated<Ticket>>(`/portal/tickets?${qs.toString()}`);
+      setTickets(json?.data ?? []);
+      setTotalPages(json?.last_page ?? 1);
+
+      const activeOrg = json.organization ?? null;
+      const orgs = json.organizations ?? [];
+      setOrgOptions(orgs);
+
+      if (activeOrg?.id) {
+        setOrgId(activeOrg.id);
+        setOrgName(activeOrg.name ?? "-");
+      } else if (orgs.length > 0 && orgId === "") {
+        setOrgId(orgs[0].id);
+        setOrgName(orgs[0].name ?? "-");
+      } else if (orgs.length === 0) {
+        setOrgName("-");
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "Gagal load tickets");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ✅ init: load auth/me dulu supaya tombol Create Ticket bisa di-hide dengan tepat
+  useEffect(() => {
+    let alive = true;
+
+    async function init() {
+      setMeLoading(true);
+      try {
+        const meRes = await apiFetch<any>("/auth/me");
+        // ✅ BE return { user: {...} }
+        const meData = (meRes?.user ?? meRes?.data ?? meRes ?? null) as Me | null;
+        if (alive) setMe(meData);
+      } catch {
+        if (alive) setMe(null);
+      } finally {
+        if (alive) setMeLoading(false);
+        await load();
+        didInitRef.current = true;
+      }
+    }
+
+    init();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!didInitRef.current) return;
+    if (orgId === "") return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  // ✅ reload ketika currentPage atau perPage berubah
+  useEffect(() => {
+    if (!didInitRef.current) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, perPage]);
+
+  // ✅ reset ke halaman 1 ketika status atau search berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [status, q]);
+
+  const filtered = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    return tickets.filter((t) => {
+      const okQ =
+        !qq ||
+        t.subject?.toLowerCase().includes(qq) ||
+        String(t.id).includes(qq) ||
+        t.ticket_number?.toLowerCase().includes(qq);
+      return okQ;
+    });
+  }, [tickets, q]);
+
+  const doLogout = async () => {
+    await logout().catch(() => {});
+    router.replace("/login");
+  };
+
+  return (
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            {/* Logo on the left */}
+            <div className="flex-shrink-0">
+              <ViriyaLogo size="md" />
+            </div>
+            {/* Ticket History content on the right */}
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Ticket History</h1>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm hover:shadow"
+              onClick={() => router.push("/portal/profile")}
+            >
+              👤 Profile
+            </button>
+
+            <button
+              type="button"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm hover:shadow"
+              onClick={doLogout}
+            >
+              🚪 Logout
+            </button>
+
+            <button
+              type="button"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm hover:shadow"
+              onClick={() => router.push("/portal")}
+            >
+              ← Back
+            </button>
+
+            {/* ✅ Hide untuk master_role_id=2 (viriyastaff) */}
+            {!meLoading && !isViriyaStaff(me) && (
+              <button
+                type="button"
+                className="rounded-lg bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 text-sm font-medium text-white hover:from-green-600 hover:to-green-700 transition-all shadow-md hover:shadow-lg"
+                onClick={() => router.push("/portal/tickets/new")}
+              >
+                ➕ Create Ticket
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:flex-wrap">
+              <input
+                className="w-full md:w-[260px] lg:w-[340px] rounded-lg border border-slate-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                placeholder="🔍 Search by Ticket #, Subject..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+
+              <select
+                className="w-full md:w-[140px] lg:w-[160px] rounded-lg border border-slate-300 px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as any)}
+              >
+                <option value="all">📊 All Status</option>
+                <option value="open">🟢 Open</option>
+                <option value="closed">🔴 Closed</option>
+              </select>
+
+              {orgOptions.length > 0 ? (
+                <select
+                  className="w-full md:w-[200px] rounded-lg border border-slate-300 px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  value={orgId === "" ? "" : String(orgId)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOrgId(val ? Number(val) : "");
+                  }}
+                >
+                  {orgOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      🏢 {o.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 px-3 py-2 text-sm text-slate-700 font-medium">
+                  <span>🏢</span>
+                  <span>{orgName}</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm hover:shadow disabled:opacity-60"
+              onClick={load}
+              disabled={loading}
+            >
+              ↻ Refresh
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-4 flex items-center justify-between">
+            <div className="text-sm font-bold text-slate-900">📋 Tickets ({filtered.length})</div>
+
+            {/* ✅ Per-Page Dropdown */}
+            {tickets.length > 0 && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-slate-700 font-medium">Show</label>
+                <select
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={1000}>1000</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="p-4 text-sm text-red-700 bg-red-50 border-b border-red-200 rounded-none">
+              <div className="flex items-start gap-3">
+                <span className="text-lg">⚠️</span>
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="p-8 text-center text-sm text-slate-600">⏳ Loading tickets...</div>
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center text-sm text-slate-600">
+              <div className="text-3xl mb-2">📭</div>
+              <span>Belum ada ticket.</span>
+            </div>
+          ) : (
+            <div className="w-full overflow-auto">
+              <table className="min-w-full w-full text-sm">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-6 py-3 font-bold">Ticket ID</th>
+                    <th className="text-left px-6 py-3 font-bold">Subject</th>
+                    <th className="text-left px-6 py-3 font-bold">Status</th>
+                    <th className="text-left px-6 py-3 font-bold">Priority</th>
+                    <th className="text-left px-6 py-3 font-bold">Inventory</th>
+                    <th className="text-left px-6 py-3 font-bold">Reporter</th>
+                    <th className="text-left px-6 py-3 font-bold">Created</th>
+                    <th className="text-right px-6 py-3 font-bold">Action</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filtered.map((t) => (
+                    <tr key={t.id} className="border-t hover:bg-blue-50 transition-colors">
+                      <td className="px-6 py-3 font-mono text-xs font-semibold text-slate-700">
+                        {t.ticket_number}
+                      </td>
+                      <td className="px-6 py-3 font-semibold text-slate-900 truncate">{t.subject}</td>
+                      <td className="px-6 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            t.status?.toLowerCase() === "closed"
+                              ? "bg-red-100 text-red-700"
+                              : t.status?.toLowerCase() === "open"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-slate-700">
+                        {t.priority ?? <span className="text-slate-400 italic">-</span>}
+                      </td>
+                      <td className="px-6 py-3 text-slate-700">
+                        {t.inventory_item?.name ??
+                          t.inventory_item_name ??
+                          t.category ??
+                          <span className="text-slate-400 italic">-</span>}
+                      </td>
+                      <td className="px-6 py-3 text-slate-700">
+                        {t.reporter_name ??
+                          t.user?.name ??
+                          t.creator?.name ??
+                          <span className="text-slate-400 italic">-</span>}
+                      </td>
+                      <td className="px-6 py-3 text-slate-600 text-xs">{fmtDate(t.created_at)}</td>
+                      <td className="px-6 py-3 text-right">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+                          onClick={() => router.push(`/portal/tickets/${t.id}`)}
+                        >
+                          👁️ View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ✅ Pagination Buttons at Bottom */}
+          {tickets.length > 0 && totalPages > 1 && (
+            <div className="border-t border-slate-200 bg-gradient-to-r from-slate-50 to-white px-6 py-4 flex items-center justify-center gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                    currentPage === page
+                      ? "bg-blue-500 text-white shadow-md hover:bg-blue-600"
+                      : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  }`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
