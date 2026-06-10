@@ -116,6 +116,8 @@ jobs:
 
             echo "== Frontend runtime deps (build sudah diupload) =="
             cd "$DEPLOY_PATH"
+            # Buang config TS lama yang mungkin tertinggal (sudah diganti next.config.mjs)
+            rm -f "$DEPLOY_PATH/apps/client/next.config.ts"
             pnpm install --prod --frozen-lockfile || pnpm install --prod
 
             echo "== Restart Passenger (cPanel Node.js App) =="
