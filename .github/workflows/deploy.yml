@@ -14,8 +14,7 @@ concurrency:
 jobs:
   deploy:
     name: Build & Deploy ke cPanel
-    # Dijalankan oleh self-hosted runner (di WSL) karena SSH server diblok firewall untuk IP cloud GitHub.
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       # URL publik produksi (frontend memanggil API ini dari browser)
