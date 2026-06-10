@@ -99,6 +99,7 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
             export PATH="/usr/local/bin:$PATH"
+            export CI=true   # agar pnpm boleh merapikan node_modules tanpa TTY (non-interaktif)
             corepack enable >/dev/null 2>&1 || true
             echo "node: $(node -v 2>/dev/null) | pnpm: $(pnpm -v 2>/dev/null) | php: $(php -r 'echo PHP_VERSION;' 2>/dev/null)"
 
