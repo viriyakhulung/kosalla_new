@@ -88,6 +88,29 @@ buat branch  →  push  →  CI jalan (lint + build)
 
 ---
 
+## 6. Firewall — agar auto-deploy (Opsi B) andal
+
+Hosting (cPanel/rapidplex) **membatasi akses SSH per-IP**. Tiap run GitHub Actions
+memakai IP acak — sebagian lolos, sebagian **di-drop firewall** (error `Connection timed out`
+di tahap Rsync/Remote).
+
+**Jika satu run gagal di tahap "Cek koneksi SSH":**
+- Buka tab **Actions → run yang gagal → "Re-run jobs"**. Runner akan dapat IP baru; sering kali percobaan berikutnya lolos.
+
+**Agar benar-benar mulus (hilangkan acak-acakan), minta ke support hosting** — contoh pesan:
+
+> Mohon izinkan akses SSH (port **64000**) dari IP luar untuk akun `viriyadb`.
+> Saya memakai GitHub Actions untuk deploy otomatis. Bisa tolong:
+> (a) buka port SSH 64000 untuk semua IP (autentikasi sudah pakai SSH key, tanpa password), **atau**
+> (b) whitelist rentang IP GitHub Actions di firewall (CSF)?
+> Daftar IP GitHub Actions: `https://api.github.com/meta` (kolom `actions`).
+
+> Catatan: SSH server ini sudah memakai **key-only auth** di port non-standar, jadi membukanya untuk umum relatif aman.
+
+Selama firewall belum dibuka, auto-deploy **tetap bisa** dipakai — hanya kadang perlu klik **Re-run** sampai dapat IP yang lolos.
+
+---
+
 ## 5. Catatan keamanan
 
 Source ini berisi `.env` dengan kredensial produksi lama (DB, SMTP, `APP_KEY`).
