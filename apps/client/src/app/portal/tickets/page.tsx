@@ -308,7 +308,7 @@ export default function TicketHistoryPage() {
           <button
             type="button"
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-60"
-            onClick={loadTickets}
+            onClick={() => loadTickets()}
             disabled={loading}
           >
             ↻ Refresh
