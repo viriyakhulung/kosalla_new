@@ -70,7 +70,7 @@ jobs:
       - name: Rsync ke server
         if: env.SSH_HOST != ''
         run: |
-          rsync -az --delete \
+          rsync -az \
             -e "ssh -i ~/.ssh/id_deploy -p ${SSH_PORT:-22}" \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -94,6 +94,14 @@ jobs:
           ssh -i ~/.ssh/id_deploy -p "${SSH_PORT:-22}" "$SSH_USER@$SSH_HOST" \
             "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
             set -e
+
+            # --- Muat nvm + corepack agar node/pnpm terbaca di shell non-interaktif ---
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+            export PATH="/usr/local/bin:$PATH"
+            corepack enable >/dev/null 2>&1 || true
+            echo "node: $(node -v 2>/dev/null) | pnpm: $(pnpm -v 2>/dev/null) | php: $(php -r 'echo PHP_VERSION;' 2>/dev/null)"
+
             cd "$DEPLOY_PATH"
 
             echo "== Backend (Laravel) =="
@@ -104,13 +112,13 @@ jobs:
             php artisan route:cache
             php artisan view:cache
             php artisan storage:link || true
-            cd ..
 
             echo "== Frontend runtime deps (build sudah diupload) =="
+            cd "$DEPLOY_PATH"
             pnpm install --prod --frozen-lockfile || pnpm install --prod
 
             echo "== Restart Passenger (cPanel Node.js App) =="
-            mkdir -p tmp && touch tmp/restart.txt
+            mkdir -p "$DEPLOY_PATH/tmp" && touch "$DEPLOY_PATH/tmp/restart.txt"
 
             echo "== Selesai =="
           REMOTE
