@@ -114,11 +114,18 @@ export default function TicketHistoryPage() {
 
   const didInitRef = useRef(false);
 
-  // Load stats from full ticket list (runs once on mount)
-  async function loadStats() {
+  // Load stats from full ticket list untuk org yang sedang dipilih.
+  // PENTING: kirim org_id supaya kartu & tab counts sinkron dengan tabel,
+  // bukan nyangkut di organisasi pribadi user (relevan untuk viriyastaff).
+  async function loadStats(org?: number | "") {
+    const _orgId = org !== undefined ? org : orgId;
     setStatsLoading(true);
     try {
-      const json = await apiFetch<Paginated<Ticket>>("/portal/tickets?per_page=500");
+      const qs = new URLSearchParams();
+      qs.set("per_page", "500");
+      if (_orgId !== "") qs.set("org_id", String(_orgId));
+
+      const json = await apiFetch<Paginated<Ticket>>(`/portal/tickets?${qs.toString()}`);
       const all: Ticket[] = json?.data ?? [];
 
       const open = all.filter((t) => t.status?.toLowerCase() !== "closed").length;
@@ -213,6 +220,7 @@ export default function TicketHistoryPage() {
     if (!didInitRef.current) return;
     if (orgId === "") return;
     loadTickets({ org: orgId });
+    loadStats(orgId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 

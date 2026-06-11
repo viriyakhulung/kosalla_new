@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Ticket\StoreTicketRequest;
 use App\Models\Contract;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
 use Illuminate\Http\Request;
@@ -75,6 +76,39 @@ class PortalTicketController extends Controller
         }
 
         $tickets = $q->paginate($perPage);
+
+        // Kolom turunan `first_response_at` / `first_response_by` = balasan staff
+        // pertama (ticket_comments.is_internal=false & bukan dari pembuat tiket).
+        // Dipakai dashboard portal untuk menghitung "Avg. Response".
+        $items = collect($tickets->items());
+        $ids = $items->pluck('id')->all();
+        $createdByMap = $items->pluck('created_by', 'id');
+
+        $firstByTicket = [];
+        if (!empty($ids)) {
+            $comments = TicketComment::query()
+                ->whereIn('ticket_id', $ids)
+                ->where('is_internal', false)
+                ->orderBy('created_at')
+                ->with('user:id,name')
+                ->get(['id', 'ticket_id', 'user_id', 'created_at']);
+
+            foreach ($comments as $c) {
+                if (isset($firstByTicket[$c->ticket_id])) continue;
+                if ((int) $c->user_id === (int) ($createdByMap[$c->ticket_id] ?? 0)) continue;
+                $firstByTicket[$c->ticket_id] = $c;
+            }
+        }
+
+        $tickets->getCollection()->transform(function ($t) use ($firstByTicket) {
+            $c = $firstByTicket[$t->id] ?? null;
+            $responder = $c
+                ? ($c->user?->name ?: ($c->user_id ? "User #{$c->user_id}" : null))
+                : null;
+            $t->setAttribute('first_response_at', $c?->created_at);
+            $t->setAttribute('first_response_by', $responder);
+            return $t;
+        });
 
         // Daftar organisasi hanya untuk role 2 (viriyastaff)
         $orgOptions = [];

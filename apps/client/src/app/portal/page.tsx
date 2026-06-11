@@ -122,10 +122,29 @@ export default function PortalDashboardPage() {
         const meData = (meRes?.user ?? meRes?.data ?? meRes ?? null) as Me | null;
         setMe(meData);
 
-        const data: PortalTicket[] = ticketsRes?.data ?? [];
-        setTickets(data);
+        let data: PortalTicket[] = ticketsRes?.data ?? [];
+        let org = ticketsRes?.organization ?? null;
 
-        const org = ticketsRes?.organization;
+        // viriyastaff mendapat daftar organizations. Bila organisasi miliknya
+        // sendiri kosong (tanpa org_id backend memakai org pribadi user), jatuh
+        // ke organisasi pertama yang punya tiket supaya kartu statistik tidak
+        // nyangkut di 0.
+        const orgs = ticketsRes?.organizations ?? [];
+        if (data.length === 0 && orgs.length > 0) {
+          for (const o of orgs) {
+            const res = await apiFetch<Paginated<PortalTicket>>(
+              `/portal/tickets?per_page=500&org_id=${o.id}`
+            );
+            const d = res?.data ?? [];
+            if (d.length > 0) {
+              data = d;
+              org = res?.organization ?? o;
+              break;
+            }
+          }
+        }
+
+        setTickets(data);
         if (org?.name) setOrgName(org.name);
       } catch {}
       setLoading(false);
