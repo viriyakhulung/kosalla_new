@@ -129,10 +129,15 @@ export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetr
         breachedCount += 1;
       }
     } else if (createdMs != null) {
-      // belum direspons → elapsed berjalan untuk deteksi pelanggaran SLA
       durationMs = now - createdMs;
-      breached = durationMs > SLA_TARGET_MS;
-      if (breached) breachedCount += 1;
+      // Hanya tiket yang masih OPEN yang dianggap "menunggu" dan bisa melanggar SLA.
+      // Tiket CLOSED tanpa balasan tercatat = sudah selesai → jangan dihitung breach.
+      if (normalizeStatus(t.status) !== "closed") {
+        breached = durationMs > SLA_TARGET_MS;
+        if (breached) breachedCount += 1;
+      } else {
+        pending = false;
+      }
     }
 
     rows.push({
