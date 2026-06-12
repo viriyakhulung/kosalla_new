@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketClosedNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 
@@ -30,19 +31,16 @@ class TicketCloseController extends Controller
         $ticket->closed_at = now(); // opsional, kalau kolom ada
         $ticket->save();
 
-        // === SEND EMAIL NOTIF: user (creator) + viriyastaff (role id 2) ===
-        $staff = User::query()
-	    ->where('master_role_id', 2)
- 		 ->whereNotNull('email')
- 		   ->get();
-
-
+        // === SEND EMAIL NOTIF: member tim yang di-attach ke org + creator ===
         $ticket->loadMissing('creator');
         $creator = $ticket->creator;
 
-        $recipients = $staff->push($creator)
+        $recipients = app(NotificationRecipientService::class)
+            ->getRecipientsForTicket($ticket)
+            ->push($creator)
             ->filter(fn ($u) => $u && !empty($u->email))
-            ->unique('id');
+            ->unique('id')
+            ->values();
 
         Notification::send(
             $recipients,

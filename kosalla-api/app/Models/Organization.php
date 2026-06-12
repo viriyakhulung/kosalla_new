@@ -4,8 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str; 
+use Illuminate\Support\Str;
 
 class Organization extends Model
 {
@@ -80,5 +81,18 @@ public function inventoryItems()
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * organisation_attach_teams: team group yang di-attach ke organisasi ini.
+     */
+    public function teamGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            TeamGroup::class,
+            'organization_team_groups',
+            'organization_id',
+            'team_group_id'
+        )->withTimestamps();
     }
 }

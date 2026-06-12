@@ -8,6 +8,7 @@ use App\Models\TicketAttachment;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -259,13 +260,15 @@ class TicketCommentController extends Controller
         //      - kalau internal (is_internal=true): imply hanya viriyastaff (customer tidak)
         // ===========================
         try {
-            $viriyaStaff = User::query()
-                ->where('master_role_id', 2)
-                ->whereNotNull('email')
+            // Penerima dasar: member tim yang di-attach ke org tiket
+            // (organisation_attach_teams). Sender dikecualikan default; ditambah
+            // lagi di bawah bila sender staff internal.
+            $recipients = app(NotificationRecipientService::class)
+                ->getRecipientsForTicket($ticket)
+                ->filter(fn ($u) => $u && !empty($u->email))
                 ->where('id', '!=', $user->id) // exclude sender (default)
-                ->get();
-
-            $recipients = $viriyaStaff;
+                ->unique('id')
+                ->values();
 
             $isSenderInternal = $this->isInternalStaffById($user) || $this->isInternalStaffByName($role);
 

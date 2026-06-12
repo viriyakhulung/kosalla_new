@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
@@ -53,9 +54,10 @@ class User extends Authenticatable
         return $this->belongsTo(Location::class);
     }
 
-    public function teamGroups()
+    public function teamGroups(): BelongsToMany
     {
         return $this->belongsToMany(\App\Models\TeamGroup::class, 'team_group_user')
+            ->withPivot(['role', 'is_active'])
             ->withTimestamps();
     }
 

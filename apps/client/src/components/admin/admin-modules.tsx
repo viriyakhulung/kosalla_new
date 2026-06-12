@@ -45,6 +45,7 @@ export const internalModules: AdminModule[] = [
   { title: "Engineers", description: "Kelola engineer dan skill", href: "/admin/engineers", icon: Wrench },
   { title: "Team Groups", description: "Buat dan kelola grup tim", href: "/admin/team-groups", icon: UsersRound },
   { title: "Team Members", description: "Kelola anggota & role tim", href: "/admin/team-members", icon: IdCard },
+  { title: "Organization Teams", description: "Atur tim per organisasi", href: "/admin/organization-teams", icon: Building2 },
 ];
 
 export type NavItem = { label: string; href: string; icon: LucideIcon };
@@ -82,6 +83,7 @@ export const adminTitles: Record<string, string> = {
   "/admin/engineers": "Engineers",
   "/admin/team-groups": "Team Groups",
   "/admin/team-members": "Team Members",
+  "/admin/organization-teams": "Organization Teams",
 };
 
 /** Cari judul terbaik berdasarkan prefix terpanjang yang cocok */

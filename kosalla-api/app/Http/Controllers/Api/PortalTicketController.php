@@ -12,7 +12,7 @@ use App\Notifications\TicketCreatedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use App\Services\TicketRoutingService;
+use App\Services\NotificationRecipientService;
 
 class PortalTicketController extends Controller
 {
@@ -33,17 +33,21 @@ class PortalTicketController extends Controller
 
         // Tentukan organization yang dipakai
         $orgId = $user->organization_id;
+        $allOrgs = false;
 
-        // role 2 (viriyastaff) boleh memilih org (org_id query)
+        // role 2 (viriyastaff) boleh memilih org (org_id query).
+        // org_id KOSONG = "All Organizations" → tampilkan tiket SEMUA org.
         if ($roleId === 2) {
             $reqOrg = $request->query('org_id');
             if ($reqOrg) {
                 $orgId = (int) $reqOrg;
+            } else {
+                $allOrgs = true;
             }
         }
 
         $q = Ticket::query()
-            ->where('organization_id', $orgId)
+            ->when(!$allOrgs, fn ($qq) => $qq->where('organization_id', $orgId))
             ->with([
                 'location:id,name,organization_id',
                 'creator:id,name,email',
@@ -73,6 +77,24 @@ class PortalTicketController extends Controller
                 $w->where('ticket_number', 'like', "%{$keyword}%")
                   ->orWhere('subject', 'like', "%{$keyword}%");
             });
+        }
+
+        // STEP 6 — Scoped ticket list (organisation_attach_teams):
+        // viriyastaff (role 2) hanya melihat tiket dari ORGANISASI yang
+        // timnya di-attach. Tanpa tim → fallback lihat semua. Superadmin (1)
+        // & custstaff (3) memakai behaviour org existing (tidak dibatasi di sini).
+        if ($roleId === 2) {
+            $userTeamIds = $user->teamGroups()
+                ->wherePivot('is_active', true)
+                ->pluck('team_groups.id');
+
+            if ($userTeamIds->isNotEmpty()) {
+                $orgIds = DB::table('organization_team_groups')
+                    ->whereIn('team_group_id', $userTeamIds)
+                    ->pluck('organization_id');
+
+                $q->whereIn('organization_id', $orgIds);
+            }
         }
 
         $tickets = $q->paginate($perPage);
@@ -116,7 +138,8 @@ class PortalTicketController extends Controller
             $orgOptions = \App\Models\Organization::select('id', 'name')->orderBy('name')->get();
         }
 
-        $activeOrg = \App\Models\Organization::select('id', 'name')->find($orgId);
+        // Saat "All Organizations" (lintas-org), tidak ada org aktif tunggal.
+        $activeOrg = $allOrgs ? null : \App\Models\Organization::select('id', 'name')->find($orgId);
 
         return response()->json([
             'data' => $tickets->items(),
@@ -242,26 +265,14 @@ class PortalTicketController extends Controller
             return $ticket;
         });
 
-        // Route ticket ke team group berdasarkan category
-        $teamGroupId = app(TicketRoutingService::class)->resolveTeamGroup(
-            $payload['category'] ?? null,
-            $user->organization_id
-        );
-        if ($teamGroupId) {
-            $ticket->update(['team_group_id' => $teamGroupId, 'last_activity_at' => now()]);
-        }
-
-        // ✅ EMAIL NOTIF: create ticket -> ke viriyastaff + creator (user)
-        $staff = User::query()
-            ->where('master_role_id', 2)
-            ->whereNotNull('email')
-            ->get();
-
-        $creator = $user;
-
-        $recipients = $staff->push($creator)
+        // EMAIL NOTIF: kirim ke member tim yang di-attach ke organisasi tiket,
+        // plus creator. (organisation_attach_teams — tidak lagi pakai routing service.)
+        $recipients = app(NotificationRecipientService::class)
+            ->getRecipientsForTicket($ticket)
+            ->push($user)
             ->filter(fn ($u) => $u && !empty($u->email))
-            ->unique('id');
+            ->unique('id')
+            ->values();
 
         $ticket->loadMissing([
             'location:id,name,organization_id',
@@ -298,6 +309,25 @@ class PortalTicketController extends Controller
         if (!$isInternal) {
             if (!$user?->organization_id || (int) $ticket->organization_id !== (int) $user->organization_id) {
                 return response()->json(['message' => 'Forbidden'], 403);
+            }
+        }
+
+        // STEP 6 — Guard scoped (organisation_attach_teams): viriyastaff yang
+        // punya tim hanya boleh buka tiket dari organisasi yang timnya di-attach.
+        // Tanpa tim → fallback boleh (tidak dibatasi). Superadmin tetap bebas.
+        if ($roleId === 2) {
+            $userTeamIds = $user->teamGroups()
+                ->wherePivot('is_active', true)
+                ->pluck('team_groups.id');
+
+            if ($userTeamIds->isNotEmpty()) {
+                $orgIds = DB::table('organization_team_groups')
+                    ->whereIn('team_group_id', $userTeamIds)
+                    ->pluck('organization_id');
+
+                if (!$orgIds->contains((int) $ticket->organization_id)) {
+                    return response()->json(['message' => 'Forbidden'], 403);
+                }
             }
         }
 

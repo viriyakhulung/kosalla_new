@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
+use App\Services\NotificationRecipientService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -165,12 +166,14 @@ class TicketController extends Controller
             ]);
         });
 
-        // ✅ notify all viriyastaff (master_role_id=2), exclude creator
-        $recipients = User::query()
-            ->where('master_role_id', 2)
-            ->whereNotNull('email')
-            ->where('id', '!=', $user->id)
-            ->get();
+        // EMAIL NOTIF: kirim ke member tim yang di-attach ke organisasi tiket,
+        // plus creator. (organisation_attach_teams — tidak lagi pakai routing service.)
+        $recipients = app(NotificationRecipientService::class)
+            ->getRecipientsForTicket($ticket)
+            ->push($user)
+            ->filter(fn ($u) => $u && !empty($u->email))
+            ->unique('id')
+            ->values();
 
         Notification::send($recipients, new TicketCreatedNotification($ticket));
 
@@ -229,6 +232,27 @@ class TicketController extends Controller
         $data['attachments'] = $attachments;
 
         return response()->json($data);
+    }
+
+    /**
+     * FORCE DELETE: hapus tiket permanen dari DB.
+     * Hanya superadmin (master_role_id = 1) yang boleh.
+     * DELETE /admin/tickets/{ticket}/force
+     */
+    public function forceDestroy(Request $request, Ticket $ticket)
+    {
+        // Pertahanan berlapis: route sudah di grup admin, tegakkan lagi role di sini.
+        if ((int) $request->user()?->master_role_id !== 1) {
+            return response()->json(['message' => 'Forbidden: hanya superadmin yang boleh menghapus permanen'], 403);
+        }
+
+        $ticketId = $ticket->id;
+        $ticket->forceDelete();
+
+        return response()->json([
+            'message' => 'Ticket dihapus permanen',
+            'id' => $ticketId,
+        ]);
     }
 
     private function generateTicketNumber(int $orgId): string

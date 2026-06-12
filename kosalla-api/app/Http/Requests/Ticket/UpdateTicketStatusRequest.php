@@ -15,7 +15,7 @@ class UpdateTicketStatusRequest extends FormRequest
     {
         return [
             'status' => ['required','in:open,in_progress,resolved,closed'],
-            'assigned_team_group_id' => ['nullable','integer','exists:team_groups,id'],
+            'team_group_id' => ['nullable','integer','exists:team_groups,id'],
             'assigned_to' => ['nullable','integer','exists:users,id'],
         ];
     }

@@ -188,10 +188,9 @@ export default function TicketHistoryPage() {
       if (activeOrg?.id) {
         setOrgId(activeOrg.id);
         setOrgName(activeOrg.name ?? "-");
-      } else if (orgs.length > 0 && _orgId === "") {
-        setOrgId(orgs[0].id);
-        setOrgName(orgs[0].name ?? "-");
-      } else if (orgs.length === 0) {
+      } else {
+        // Tidak ada org aktif tunggal = mode "All Organizations".
+        // Jangan paksa pilih org pertama — biarkan "" agar tetap lintas-org.
         setOrgName("-");
       }
     } catch (e: any) {
@@ -218,7 +217,7 @@ export default function TicketHistoryPage() {
 
   useEffect(() => {
     if (!didInitRef.current) return;
-    if (orgId === "") return;
+    // orgId === "" = "All Organizations" → tetap fetch (lintas-org untuk viriyastaff)
     loadTickets({ org: orgId });
     loadStats(orgId);
     // eslint-disable-next-line react-hooks/exhaustive-deps

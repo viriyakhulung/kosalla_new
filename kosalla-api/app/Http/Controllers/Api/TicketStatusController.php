@@ -14,13 +14,13 @@ class TicketStatusController extends Controller
 
         $ticket->update([
             'status' => $data['status'],
-            'assigned_team_group_id' => $data['assigned_team_group_id'] ?? $ticket->assigned_team_group_id,
+            'team_group_id' => $data['team_group_id'] ?? $ticket->team_group_id,
             'assigned_to' => $data['assigned_to'] ?? $ticket->assigned_to,
             'last_activity_at' => now(),
             'resolved_at' => in_array($data['status'], ['resolved','closed']) ? now() : null,
             'closed_at' => $data['status'] === 'closed' ? now() : null,
         ]);
 
-        return $ticket->load(['assignee','assignedTeamGroup']);
+        return $ticket->load(['assignee','teamGroup']);
     }
 }

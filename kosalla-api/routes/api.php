@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ContractController;
 use App\Http\Controllers\Api\TeamManagementController;
 use App\Http\Controllers\Api\UserRoleController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\OrganizationTeamController;
 use App\Http\Controllers\Api\TicketStatusController;
 use App\Http\Controllers\Api\TicketCommentController;
 use App\Http\Controllers\Api\ProductTypeController;
@@ -183,6 +184,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Admin: ticket overview per organisasi (dashboard SLA, cross-org)
             Route::get('organizations/{organization}/tickets', [TicketController::class, 'adminIndex']);
+
+            // organisation_attach_teams: kelola tim yang di-attach ke organisasi
+            Route::get('organizations/{organization}/teams', [OrganizationTeamController::class, 'index']);
+            Route::post('organizations/{organization}/teams', [OrganizationTeamController::class, 'store']);
+            Route::delete('organizations/{organization}/teams/{teamGroup}', [OrganizationTeamController::class, 'destroy']);
 
             // Admin Tickets
             Route::get('tickets', [TicketController::class, 'index']);
