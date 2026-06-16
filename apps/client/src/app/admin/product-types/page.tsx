@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Package, Building2, PackagePlus, List, Trash2 } from "lucide-react";
 import { getOrganizations } from "@/lib/organizations";
 import {
   getInventoryItemsByOrg,
@@ -10,6 +10,7 @@ import {
   getMasterProducts,
   type InventoryItem,
 } from "@/lib/inventory-items";
+import { PageHead, SectionCard, Field, adminInput, adminPrimaryBtn, RowIcon } from "@/components/admin/ui";
 
 type Org = { id: number; name: string };
 type MasterProduct = { id: number; name: string; product_type: string; is_active: boolean };
@@ -91,109 +92,138 @@ export default function ProductTypesPage() {
     }
   }
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="py-10 text-center text-sm text-slate-400">Loading...</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Inventory Items</h1>
-          <p className="text-slate-600">Assign master product ke organisasi.</p>
-        </div>
-      </div>
+      <PageHead
+        icon={<Package className="size-5" />}
+        title="Inventory Items"
+        subtitle="Assign master product ke organisasi"
+      />
 
-      {error ? (
-        <div className="border border-red-200 bg-red-50 text-red-700 p-3 rounded">
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
-      ) : null}
+      )}
 
       {/* Select Organization */}
-      <div className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-2">Select Organization</h2>
-        <select
-          className="border rounded px-3 py-2 w-full"
-          value={orgId ?? ""}
-          onChange={(e) => setOrgId(Number(e.target.value))}
-        >
-          {orgs.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.name} (ID: {o.id})
-            </option>
-          ))}
-        </select>
-        <p className="text-sm text-slate-600 mt-2">
-          Selected: <b>{selectedOrg?.name ?? "-"}</b>
-        </p>
-      </div>
-
-      {/* Assign master product ke organisasi */}
-      <div className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Assign Produk ke Organisasi</h2>
-
-        <div className="space-y-3">
-          <select
-            className="border rounded px-3 py-2 w-full"
-            value={selectedMasterId}
-            onChange={(e) => setSelectedMasterId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">--- Pilih master product ---</option>
-            {masters
-              .filter((m) => m.is_active)
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+      <SectionCard icon={<Building2 className="size-4" />} title="Select Organization">
+        {orgs.length === 0 ? (
+          <div className="text-sm text-slate-400">
+            No organizations. Buat organization dulu di menu Organizations.
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-4">
+            <select
+              className={`${adminInput} sm:max-w-xs`}
+              value={orgId ?? ""}
+              onChange={(e) => setOrgId(Number(e.target.value))}
+            >
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} (ID: {o.id})
                 </option>
               ))}
-          </select>
+            </select>
+            {selectedOrg && (
+              <p className="text-sm text-slate-500">
+                Terpilih: <span className="font-semibold text-teal-700">{selectedOrg.name}</span>
+              </p>
+            )}
+          </div>
+        )}
+      </SectionCard>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={assignActive}
-              onChange={(e) => setAssignActive(e.target.checked)}
-            />
-            Active
-          </label>
-
-          <button
-            onClick={onAssign}
-            disabled={submitting || !orgId || !selectedMasterId}
-            className="border rounded px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {submitting ? "Assigning..." : "Assign Product"}
-          </button>
+      {/* Assign master product ke organisasi */}
+      <SectionCard icon={<PackagePlus className="size-4" />} iconTone="amber" title="Assign Produk ke Organisasi">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Master product">
+            <select
+              className={adminInput}
+              value={selectedMasterId}
+              onChange={(e) => setSelectedMasterId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">— Pilih master product —</option>
+              {masters
+                .filter((m) => m.is_active)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="Status">
+            <label className="flex h-10 items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500/30"
+                checked={assignActive}
+                onChange={(e) => setAssignActive(e.target.checked)}
+              />
+              Active
+            </label>
+          </Field>
         </div>
-      </div>
+        <button
+          onClick={onAssign}
+          disabled={submitting || !orgId || !selectedMasterId}
+          className={`${adminPrimaryBtn} mt-4`}
+        >
+          <PackagePlus className="size-4" />
+          {submitting ? "Assigning..." : "Assign Product"}
+        </button>
+      </SectionCard>
 
       {/* List */}
-      <div className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">List</h2>
-
+      <SectionCard
+        icon={<List className="size-4" />}
+        title="List"
+        subtitle={orgId ? `${items.length} item` : undefined}
+      >
         {items.length === 0 ? (
-          <p className="text-slate-600 text-sm">No items for this organization</p>
+          <div className="py-6 text-center text-sm text-slate-400">No items for this organization</div>
         ) : (
           <div className="space-y-2">
             {items.map((it) => (
-              <div key={it.id} className="border rounded p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{it.name}</div>
-                  <div className="text-sm text-slate-600">
-                    ID: {it.id} • OrgID: {it.organization_id} • Type: {it.product_type} • Active:{" "}
-                    {it.is_active ? "yes" : "no"}
+              <div
+                key={it.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <RowIcon icon={<Package className="size-4" />} tone="amber" />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{it.name}</span>
+                      <span
+                        className={
+                          it.is_active
+                            ? "rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600"
+                            : "rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500"
+                        }
+                      >
+                        {it.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      ID: {it.id} · OrgID: {it.organization_id} · Type: {it.product_type}
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => onDelete(it.id)}
-                  className="border rounded px-3 py-2 hover:bg-red-50"
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                  aria-label="Delete"
                 >
-                  Delete
+                  <Trash2 className="size-4" />
                 </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

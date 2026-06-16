@@ -49,7 +49,8 @@ class PortalTicketController extends Controller
         $q = Ticket::query()
             ->when(!$allOrgs, fn ($qq) => $qq->where('organization_id', $orgId))
             ->with([
-                'location:id,name,organization_id',
+                'location:id,name,organization_id,branch_id',
+                'location.branch:id,name',
                 'creator:id,name,email',
                 'inventoryItem:id,name',
                 'organization:id,name',
@@ -275,7 +276,8 @@ class PortalTicketController extends Controller
             ->values();
 
         $ticket->loadMissing([
-            'location:id,name,organization_id',
+            'location:id,name,organization_id,branch_id',
+            'location.branch:id,name',
             'creator:id,name,email',
             'inventoryItem:id,name',
             'organization:id,name',
@@ -286,7 +288,8 @@ class PortalTicketController extends Controller
         return response()->json([
             'message' => 'Ticket created',
             'data' => $ticket->load([
-                'location:id,name,organization_id',
+                'location:id,name,organization_id,branch_id',
+                'location.branch:id,name',
                 'creator:id,name,email',
                 'inventoryItem:id,name',
                 'organization:id,name',
@@ -332,7 +335,8 @@ class PortalTicketController extends Controller
         }
 
         $ticket->load([
-            'location:id,name,organization_id',
+            'location:id,name,organization_id,branch_id',
+            'location.branch:id,name',
             'creator:id,name,email',
             'inventoryItem:id,name',
             'organization:id,name',

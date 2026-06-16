@@ -68,6 +68,11 @@ public function inventoryItems()
         return $this->hasMany(Location::class);
     }
 
+    public function branches(): HasMany
+    {
+        return $this->hasMany(Branch::class, 'organization_id');
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

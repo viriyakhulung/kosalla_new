@@ -36,6 +36,8 @@ class Ticket extends Model
         'complete_ps',
         'schedule_comment',
         'last_activity_at',
+        'resolved_at',
+        'closed_at',
     ];
 
     protected $casts = [
@@ -80,5 +82,15 @@ class Ticket extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(TicketAttachment::class);
+    }
+
+    /**
+     * Cabang asal tiket — diturunkan dari lokasi (ticket → location → branch).
+     * Tidak ada kolom branch_id di tickets; satu sumber kebenaran = location.
+     * Eager-load berantai `with('location.branch')` agar tidak N+1.
+     */
+    public function getBranchAttribute()
+    {
+        return $this->location?->branch;
     }
 }

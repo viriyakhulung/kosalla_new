@@ -47,6 +47,20 @@ class StoreLocationRequest extends FormRequest
 
             'address' => ['nullable', 'string'],
             'timezone' => ['nullable', 'string', 'max:64'],
+
+            // branch_id opsional; harus cabang milik organisasi yang sama (same-org).
+            'branch_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('branches', 'id')->where('organization_id', $org->id),
+            ],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'branch_id.exists' => 'Cabang tidak ditemukan atau bukan milik organisasi ini.',
         ];
     }
 }

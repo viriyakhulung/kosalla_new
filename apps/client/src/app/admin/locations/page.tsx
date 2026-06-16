@@ -1,21 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Building2, Plus, Trash2, List } from "lucide-react";
+import { MapPin, Building2, Plus, Trash2, List, GitBranch } from "lucide-react";
 import { getOrganizations } from "@/lib/organizations";
 import { getLocations, createLocation, deleteLocation } from "@/lib/locations";
+import { listBranches, type Branch } from "@/lib/branches";
 import { PageHead, StatCard, SectionCard, Field, adminInput, adminPrimaryBtn, RowIcon } from "@/components/admin/ui";
 
 type Org = { id: number; name: string };
-type Loc = { id: number; organization_id: number; name: string; address?: string | null };
+type Loc = { id: number; organization_id: number; branch_id?: number | null; name: string; address?: string | null };
 
 export default function LocationsPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
 
   const [locs, setLocs] = useState<Loc[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [branchId, setBranchId] = useState<number | "">("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -56,13 +59,17 @@ export default function LocationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // reload locations when org changes
+  // reload locations + branches when org changes
   useEffect(() => {
     if (!selectedOrgId) return;
+    setBranchId("");
     loadLocs(selectedOrgId).catch((e: any) => {
       console.error("❌ [LOC PAGE] load locs error", e);
       setError(e?.message ?? "Failed to load locations");
     });
+    listBranches(selectedOrgId)
+      .then(setBranches)
+      .catch(() => setBranches([]));
   }, [selectedOrgId]);
 
   async function onCreate() {
@@ -82,10 +89,12 @@ export default function LocationsPage() {
       await createLocation(selectedOrgId, {
         name: name.trim(),
         address: address.trim() ? address.trim() : null,
+        branch_id: branchId === "" ? null : Number(branchId),
       });
 
       setName("");
       setAddress("");
+      setBranchId("");
       await loadLocs(selectedOrgId);
     } catch (e: any) {
       console.error("❌ [LOC PAGE] create error", e);
@@ -94,7 +103,9 @@ export default function LocationsPage() {
   }
 
   async function onDelete(id: number) {
-    const ok = confirm("Yakin delete location ini?");
+    const ok = confirm(
+      "Hapus permanen lokasi ini? Tindakan ini tidak bisa dibatalkan. Tiket yang memakai lokasi ini akan dilepas (location → kosong)."
+    );
     if (!ok) return;
 
     try {
@@ -172,6 +183,24 @@ export default function LocationsPage() {
               onChange={(e) => setAddress(e.target.value)}
             />
           </Field>
+          <Field label="Cabang (optional)">
+            <select
+              className={adminInput}
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
+              disabled={branches.length === 0}
+            >
+              <option value="">
+                {branches.length === 0 ? "— Belum ada cabang di org ini —" : "— Tanpa cabang —"}
+              </option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.code ? ` (${b.code})` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
         <button className={`${adminPrimaryBtn} mt-4`} onClick={onCreate}>
           <MapPin className="size-4" /> Create Location
@@ -198,7 +227,15 @@ export default function LocationsPage() {
                 <div className="flex items-center gap-3">
                   <RowIcon icon={<MapPin className="size-4" />} tone="amber" />
                   <div>
-                    <div className="font-semibold text-slate-900">{loc.name}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{loc.name}</span>
+                      {loc.branch_id && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                          <GitBranch className="size-3" />
+                          {branches.find((b) => b.id === loc.branch_id)?.name ?? `Cabang #${loc.branch_id}`}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-400">
                       {loc.address ? loc.address : `OrgID: ${loc.organization_id}`}
                     </div>

@@ -2,17 +2,17 @@ import type { Ticket } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.kosalla.viriyadb.com";
 
-/** Target SLA respons pertama (jam). Ubah sesuai kebijakan. */
+/** Target SLA penyelesaian tiket (jam), dihitung dari dibuat → di-close. Ubah sesuai kebijakan. */
 export const SLA_TARGET_HOURS = 4;
 const SLA_TARGET_MS = SLA_TARGET_HOURS * 60 * 60 * 1000;
 
 /** Bentuk tiket dari endpoint admin (paginator Laravel) + kolom turunan. */
 export type RawTicket = Ticket & {
   ticket_number?: string | null;
-  /** waktu balasan staff pertama, dihitung backend (ticket_comments) */
-  first_response_at?: string | null;
-  /** nama orang yang membalas pertama kali */
-  first_response_by?: string | null;
+  /** waktu tiket di-close (kolom tickets.closed_at) — dasar perhitungan SLA */
+  closed_at?: string | null;
+  /** waktu tiket di-resolve (kolom tickets.resolved_at) */
+  resolved_at?: string | null;
 };
 
 function getToken() {
@@ -70,10 +70,9 @@ export type ActivityRow = {
   subject: string;
   createdAt: string | null;
   createdBy: string | null; // siapa yang membuat
-  respondedAt: string | null;
-  respondedBy: string | null; // siapa yang membalas pertama
-  durationMs: number | null; // responded−created, atau elapsed (now−created) bila pending
-  pending: boolean;
+  closedAt: string | null; // waktu tiket di-close (null bila belum)
+  durationMs: number | null; // closed−created, atau elapsed (now−created) bila belum closed
+  pending: boolean; // true = belum closed
   breached: boolean;
 };
 
@@ -82,8 +81,8 @@ export type DashboardMetrics = {
   open: number;
   closed: number;
   slices: StatusSlice[];
-  avgResponseMs: number | null;
-  respondedCount: number;
+  avgResolutionMs: number | null;
+  resolvedCount: number; // jumlah tiket closed dengan closed_at valid
   withinSlaCount: number;
   breachedCount: number;
   slaPct: number | null;
@@ -100,7 +99,7 @@ function ms(s?: string | null): number | null {
 export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetrics {
   let closedCount = 0;
 
-  let respondedCount = 0;
+  let resolvedCount = 0;
   let withinSlaCount = 0;
   let breachedCount = 0;
   let durationSum = 0;
@@ -108,36 +107,36 @@ export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetr
   const rows: ActivityRow[] = [];
 
   for (const t of tickets) {
-    if (normalizeStatus(t.status) === "closed") closedCount += 1;
+    const isClosed = normalizeStatus(t.status) === "closed";
+    if (isClosed) closedCount += 1;
 
     const createdMs = ms(t.created_at);
-    const respondedAt = t.first_response_at ?? null;
-    const respondedMs = ms(respondedAt);
+    const closedAt = t.closed_at ?? null;
+    const closedMs = ms(closedAt);
 
     let durationMs: number | null = null;
     let pending = true;
     let breached = false;
 
-    if (respondedMs != null && createdMs != null) {
-      durationMs = respondedMs - createdMs;
+    if (isClosed) {
+      // tiket selesai → SLA = waktu penyelesaian (closed − created)
       pending = false;
-      respondedCount += 1;
-      durationSum += durationMs;
-      if (durationMs <= SLA_TARGET_MS) withinSlaCount += 1;
-      else {
-        breached = true;
-        breachedCount += 1;
+      if (closedMs != null && createdMs != null) {
+        durationMs = closedMs - createdMs;
+        resolvedCount += 1;
+        durationSum += durationMs;
+        if (durationMs <= SLA_TARGET_MS) withinSlaCount += 1;
+        else {
+          breached = true;
+          breachedCount += 1;
+        }
       }
+      // closed tanpa closed_at (data lama) → durasi tak diketahui, tak dihitung ke SLA
     } else if (createdMs != null) {
+      // belum closed → elapsed berjalan untuk deteksi pelanggaran SLA
       durationMs = now - createdMs;
-      // Hanya tiket yang masih OPEN yang dianggap "menunggu" dan bisa melanggar SLA.
-      // Tiket CLOSED tanpa balasan tercatat = sudah selesai → jangan dihitung breach.
-      if (normalizeStatus(t.status) !== "closed") {
-        breached = durationMs > SLA_TARGET_MS;
-        if (breached) breachedCount += 1;
-      } else {
-        pending = false;
-      }
+      breached = durationMs > SLA_TARGET_MS;
+      if (breached) breachedCount += 1;
     }
 
     rows.push({
@@ -146,8 +145,7 @@ export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetr
       subject: t.subject || `Tiket #${t.id}`,
       createdAt: t.created_at ?? null,
       createdBy: t.creator?.name ?? null,
-      respondedAt,
-      respondedBy: t.first_response_by ?? null,
+      closedAt,
       durationMs,
       pending,
       breached,
@@ -170,11 +168,11 @@ export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetr
     open: openCount,
     closed: closedCount,
     slices,
-    avgResponseMs: respondedCount ? durationSum / respondedCount : null,
-    respondedCount,
+    avgResolutionMs: resolvedCount ? durationSum / resolvedCount : null,
+    resolvedCount,
     withinSlaCount,
     breachedCount,
-    slaPct: respondedCount ? Math.round((withinSlaCount / respondedCount) * 100) : null,
+    slaPct: resolvedCount ? Math.round((withinSlaCount / resolvedCount) * 100) : null,
     activity: rows,
   };
 }

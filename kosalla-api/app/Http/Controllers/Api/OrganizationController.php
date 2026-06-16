@@ -133,6 +133,7 @@ class OrganizationController extends Controller
             DB::table('contracts')->where('organization_id', $orgId)->delete();
             DB::table('inventory_items')->where('organization_id', $orgId)->delete();
             DB::table('locations')->where('organization_id', $orgId)->delete();
+            DB::table('branches')->where('organization_id', $orgId)->delete();
             DB::table('users')->where('organization_id', $orgId)->delete();
 
             // 6) Terakhir: hapus organization row (HARD DELETE)

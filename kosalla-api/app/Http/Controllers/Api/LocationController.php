@@ -7,6 +7,8 @@ use App\Http\Requests\Location\StoreLocationRequest;
 use App\Http\Requests\Location\UpdateLocationRequest;
 use App\Models\Organization;
 use App\Models\Location;
+use App\Models\Ticket;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class LocationController extends Controller
@@ -41,7 +43,13 @@ class LocationController extends Controller
 
     public function destroy(Location $location)
     {
-        $location->delete();
+        // Hard delete. tickets.location_id FK = restrictOnDelete, jadi lepas tiket
+        // dulu dalam satu transaksi sebelum menghapus lokasi permanen.
+        DB::transaction(function () use ($location) {
+            Ticket::where('location_id', $location->id)->update(['location_id' => null]);
+            $location->delete();
+        });
+
         return response()->json(['message' => 'Location deleted']);
     }
 }

@@ -3,6 +3,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.kosalla.viriyadb
 export type Location = {
   id: number;
   organization_id: number;
+  branch_id?: number | null;
   name: string;
   address?: string | null;
   is_active?: boolean;
@@ -50,7 +51,7 @@ export async function getLocations(orgId: number) {
 // CREATE (nested)
 export async function createLocation(
   orgId: number,
-  payload: { name: string; address?: string | null; is_active?: boolean }
+  payload: { name: string; address?: string | null; is_active?: boolean; branch_id?: number | null }
 ) {
   return apiFetch(`/api/admin/organizations/${orgId}/locations`, {
     method: "POST",

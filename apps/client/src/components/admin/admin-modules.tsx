@@ -11,6 +11,7 @@ import {
   Wrench,
   UsersRound,
   IdCard,
+  GitBranch,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export type AdminModule = {
 export const externalModules: AdminModule[] = [
   { title: "Users", description: "Kelola akun pengguna sistem", href: "/admin/users", icon: Users },
   { title: "Organizations", description: "Setup dan kelola organisasi", href: "/admin/organizations", icon: Building2 },
+  { title: "Branches", description: "Kelola cabang (sub-unit) per organisasi", href: "/admin/branches", icon: GitBranch },
   { title: "Locations", description: "Kelola lokasi operasional", href: "/admin/locations", icon: MapPin },
   { title: "Inventory Items", description: "Kelola produk per organisasi", href: "/admin/product-types", icon: Package },
   { title: "Master Products", description: "Katalog produk global", href: "/admin/master-products", icon: Boxes },
@@ -74,6 +76,7 @@ export const adminTitles: Record<string, string> = {
   "/admin": "Dashboard",
   "/admin/users": "Users",
   "/admin/organizations": "Organizations",
+  "/admin/branches": "Branches",
   "/admin/locations": "Locations",
   "/admin/product-types": "Inventory Items",
   "/admin/master-products": "Master Products",

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\TeamManagementController;
 use App\Http\Controllers\Api\UserRoleController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\OrganizationTeamController;
+use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\TicketStatusController;
 use App\Http\Controllers\Api\TicketCommentController;
 use App\Http\Controllers\Api\ProductTypeController;
@@ -161,6 +162,9 @@ Route::middleware('auth:sanctum')->group(function () {
             // Organizations CRUD
             Route::apiResource('organizations', OrganizationController::class);
             Route::apiResource('organizations.locations', LocationController::class)->shallow();
+
+            // Branches (sub-unit organisasi) — anak-org, shallow seperti locations
+            Route::apiResource('organizations.branches', BranchController::class)->shallow();
 
             // Products
             Route::apiResource('product-types', ProductTypeController::class);

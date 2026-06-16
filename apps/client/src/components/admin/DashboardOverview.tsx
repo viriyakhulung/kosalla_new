@@ -11,7 +11,6 @@ import {
   Info,
   PlusCircle,
   RefreshCw,
-  Reply,
   Ticket as TicketIcon,
   Timer,
 } from "lucide-react";
@@ -152,8 +151,8 @@ export function DashboardOverview() {
         <StatCard
           icon={<Timer className="size-5" />}
           tone="teal"
-          value={formatDurationShort(metrics.avgResponseMs)}
-          label="Avg. Respons"
+          value={formatDurationShort(metrics.avgResolutionMs)}
+          label="Avg. Penyelesaian"
           loading={busy}
         />
       </div>
@@ -178,14 +177,14 @@ export function DashboardOverview() {
 
         {/* SLA + activity */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
-          <h3 className="text-sm font-bold text-slate-900">Waktu Respons (SLA)</h3>
+          <h3 className="text-sm font-bold text-slate-900">Waktu Penyelesaian (SLA)</h3>
           <div className="mt-2 flex items-end gap-3">
             <span className="text-3xl font-extrabold leading-none text-slate-900">
-              {formatHours(metrics.avgResponseMs)}
+              {formatHours(metrics.avgResolutionMs)}
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Rata-rata respons pertama · target SLA {SLA_TARGET_HOURS} jam
+            Rata-rata waktu penyelesaian (dibuat → closed) · target SLA {SLA_TARGET_HOURS} jam
           </p>
 
           {/* SLA progress (proporsi dalam SLA) */}
@@ -215,9 +214,9 @@ export function DashboardOverview() {
           <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
             <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
             <span>
-              <b className="font-semibold text-slate-600">Lewat SLA</b> = waktu balasan pertama melebihi target{" "}
-              {SLA_TARGET_HOURS} jam. Tiket yang <b className="font-semibold text-slate-600">belum dibalas</b> dihitung dari
-              lama menunggu sejak dibuat — jadi tiket lama yang belum pernah dibalas otomatis “Lewat SLA”.
+              <b className="font-semibold text-slate-600">Lewat SLA</b> = waktu penyelesaian (dibuat → closed) melebihi target{" "}
+              {SLA_TARGET_HOURS} jam. Tiket yang <b className="font-semibold text-slate-600">belum closed</b> dihitung dari
+              lama berjalan sejak dibuat — jadi tiket lama yang belum selesai otomatis “Lewat SLA”.
             </span>
           </p>
 
@@ -231,7 +230,7 @@ export function DashboardOverview() {
                 <tr className="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                   <th className="py-2 pr-3 font-semibold">Tiket</th>
                   <th className="py-2 pr-3 font-semibold">Dibuat</th>
-                  <th className="py-2 pr-3 font-semibold">Direspons</th>
+                  <th className="py-2 pr-3 font-semibold">Ditutup</th>
                   <th className="py-2 pr-3 font-semibold">Durasi</th>
                   <th className="py-2 font-semibold">SLA</th>
                 </tr>
@@ -268,16 +267,11 @@ export function DashboardOverview() {
                         )}
                       </td>
                       <td className="py-3 pr-3">
-                        {row.respondedAt ? (
-                          <>
-                            <span className="inline-flex items-center gap-1.5 text-slate-600">
-                              <Reply className="size-3.5 text-slate-400" />
-                              {formatClock(row.respondedAt)}
-                            </span>
-                            {row.respondedBy && (
-                              <p className="mt-0.5 max-w-[130px] truncate text-xs text-slate-400">{row.respondedBy}</p>
-                            )}
-                          </>
+                        {row.closedAt ? (
+                          <span className="inline-flex items-center gap-1.5 text-slate-600">
+                            <CheckCircle2 className="size-3.5 text-slate-400" />
+                            {formatClock(row.closedAt)}
+                          </span>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
@@ -388,7 +382,7 @@ function SlaBadge({ pending, breached }: { pending: boolean; breached: boolean }
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600">
         <span className="size-1.5 rounded-full bg-amber-500" />
-        Menunggu
+        Belum selesai
       </span>
     );
   }

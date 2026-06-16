@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { Info, Users, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { SectionCard, Field, adminInput, adminPrimaryBtn, adminGhostBtn } from "@/components/admin/ui";
 
 type User = {
   id: number;
@@ -121,12 +123,12 @@ export default function AdminUserArticlesAccessPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <>
       {/* INFO */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-2">
+      <SectionCard icon={<Info className="size-4" />} iconTone="sky" title="Tentang Akses">
         <div className="text-sm text-slate-700">
           Halaman ini untuk mengatur akses user internal terkait User Articles:
-          <ul className="list-disc pl-5 mt-2 text-slate-600">
+          <ul className="mt-2 list-disc pl-5 text-slate-600">
             <li>
               <b>create_publish</b>: boleh create + publish, review off
             </li>
@@ -141,48 +143,46 @@ export default function AdminUserArticlesAccessPage() {
             Catatan: modul ini tidak butuh organization_id, karena hanya mengatur akses user internal (role 1/2).
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* PICK USER + MODE */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-end gap-3 justify-between">
-          <div className="w-full">
-            <label className="text-xs font-semibold text-slate-600">Search user (email / name)</label>
-            <input
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="contoh: lung@ / khulung / superadmin@..."
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
-              onClick={() => loadUsers().catch(() => {})}
-              disabled={loading}
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
+      <SectionCard
+        icon={<Users className="size-4" />}
+        title="Atur Akses User"
+        action={
+          <button className={adminGhostBtn} onClick={() => loadUsers().catch(() => {})} disabled={loading}>
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </button>
+        }
+      >
+        <Field label="Search user (email / name)">
+          <input
+            className={adminInput}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="contoh: lung@ / khulung / superadmin@..."
+          />
+        </Field>
 
         {err ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
         ) : null}
         {okMsg ? (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{okMsg}</div>
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            {okMsg}
+          </div>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
-            <label className="text-xs font-semibold text-slate-600">Pick user (internal role 1/2)</label>
+            <label className="mb-1.5 block text-sm font-semibold text-slate-700">Pick user (internal role 1/2)</label>
 
-            <div className="mt-1 rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-hidden rounded-xl border border-slate-200">
               {loading ? (
-                <div className="p-4 text-sm text-slate-500">Loading...</div>
+                <div className="p-4 text-sm text-slate-400">Loading...</div>
               ) : filtered.length === 0 ? (
-                <div className="p-4 text-sm text-slate-500">Tidak ada user.</div>
+                <div className="p-4 text-sm text-slate-400">Tidak ada user.</div>
               ) : (
                 filtered.map((u) => {
                   const active = pickedUser?.id === u.id;
@@ -191,8 +191,8 @@ export default function AdminUserArticlesAccessPage() {
                     <button
                       key={u.id}
                       className={[
-                        "w-full text-left px-4 py-3 text-sm border-b last:border-b-0",
-                        active ? "bg-slate-50" : "hover:bg-slate-50",
+                        "w-full border-b border-slate-100 px-4 py-3 text-left text-sm transition-colors last:border-b-0",
+                        active ? "bg-teal-50" : "hover:bg-slate-50",
                       ].join(" ")}
                       onClick={() => {
                         setPickedUser(u);
@@ -204,13 +204,13 @@ export default function AdminUserArticlesAccessPage() {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="font-semibold text-slate-900">{u.email}</div>
-                          <div className="text-xs text-slate-600">
-                            {u.name ?? "-"} • role: {roleLabel(u.master_role_id)}
+                          <div className="text-xs text-slate-500">
+                            {u.name ?? "-"} · role: {roleLabel(u.master_role_id)}
                           </div>
                         </div>
 
-                        <div className="text-xs text-slate-600">
-                          mode: <b>{m}</b>
+                        <div className="text-xs text-slate-500">
+                          mode: <b className="text-slate-700">{m}</b>
                         </div>
                       </div>
                     </button>
@@ -221,24 +221,25 @@ export default function AdminUserArticlesAccessPage() {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-600">Access mode</label>
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white disabled:opacity-60"
-              value={mode}
-              onChange={(e) => setMode(e.target.value as Mode)}
-              disabled={!pickedUser}
-            >
-              <option value="create_publish">create_publish (Create + Publish)</option>
-              <option value="review_only">review_only (Reviewer saja)</option>
-              <option value="none">none (Disable)</option>
-              <option value="create_review_publish">create_review_publish (Create + Review + Publish)</option>
-            </select>
+            <Field label="Access mode">
+              <select
+                className={adminInput}
+                value={mode}
+                onChange={(e) => setMode(e.target.value as Mode)}
+                disabled={!pickedUser}
+              >
+                <option value="create_publish">create_publish (Create + Publish)</option>
+                <option value="review_only">review_only (Reviewer saja)</option>
+                <option value="none">none (Disable)</option>
+                <option value="create_review_publish">create_review_publish (Create + Review + Publish)</option>
+              </select>
+            </Field>
 
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
               User terpilih: <b>{pickedUser ? pickedUser.email : "-"}</b>
               <div className="mt-2 text-slate-600">
                 Flag sekarang:
-                <ul className="list-disc pl-5 mt-1">
+                <ul className="mt-1 list-disc pl-5">
                   <li>can_create: {String(!!pickedUser?.can_create)}</li>
                   <li>can_review: {String(!!pickedUser?.can_review)}</li>
                   <li>can_publish: {String(!!pickedUser?.can_publish)}</li>
@@ -247,7 +248,7 @@ export default function AdminUserArticlesAccessPage() {
             </div>
 
             <button
-              className="mt-3 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+              className={`${adminPrimaryBtn} mt-3 w-full`}
               disabled={!pickedUser || saving}
               onClick={() => save().catch(() => {})}
             >
@@ -255,11 +256,11 @@ export default function AdminUserArticlesAccessPage() {
             </button>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       <div className="text-xs text-slate-500">
         Tips: set minimal 1 user internal menjadi <b>review_only</b> (can_review=true) supaya bisa membuka reviewer queue.
       </div>
-    </div>
+    </>
   );
 }

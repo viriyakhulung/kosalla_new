@@ -3,8 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { logout } from "@/lib/auth";
+import { Megaphone, Filter, List, Plus, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { PageHead, SectionCard, Field, adminInput, adminPrimaryBtn, adminGhostBtn } from "@/components/admin/ui";
 
 type Product = { id: number; name: string };
 type Paginated<T> = {
@@ -80,11 +81,6 @@ export default function AdminAnnouncementsPage() {
     return buildQuery({ page, per_page: perPage, q, scope, product_id: productId });
   }, [page, perPage, q, scope, productId]);
 
-  const doLogout = async () => {
-    await logout().catch(() => {});
-    router.replace("/login");
-  };
-
   async function loadProducts() {
     setLoadingProducts(true);
     try {
@@ -135,211 +131,185 @@ export default function AdminAnnouncementsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Announcements</h1>
-            <div className="text-sm text-slate-600">Admin Module (publish langsung)</div>
-          </div>
+    <div className="space-y-6">
+      <PageHead
+        icon={<Megaphone className="size-5" />}
+        title="Announcements"
+        subtitle="Pengumuman per produk · publish langsung"
+      />
 
+      {err ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{err}</div>
+      ) : null}
+
+      {/* Filter */}
+      <SectionCard
+        icon={<Filter className="size-4" />}
+        title="Filter"
+        action={
           <div className="flex gap-2">
             <button
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-              onClick={() => router.push("/admin")}
+              className={adminGhostBtn}
+              onClick={() => {
+                setPage(1);
+                load().catch(() => {});
+              }}
             >
-              ← Back
+              <RefreshCw className="size-3.5" />
+              Refresh
             </button>
-            <button
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-              onClick={doLogout}
-            >
-              🚪 Logout
-            </button>
+            <Link className={adminPrimaryBtn} href="/admin/announcements/new">
+              <Plus className="size-4" />
+              Create
+            </Link>
           </div>
+        }
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="md:col-span-2">
+            <Field label="Search">
+              <input
+                className={adminInput}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Cari title/body..."
+              />
+            </Field>
+          </div>
+
+          <Field label="Scope">
+            <select className={adminInput} value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="">All</option>
+              <option value="global">Global</option>
+              <option value="product">Product</option>
+            </select>
+          </Field>
+
+          <Field label="Product">
+            <select
+              className={adminInput}
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              disabled={loadingProducts}
+            >
+              <option value="">All</option>
+              {products.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* List */}
+      <SectionCard
+        icon={<List className="size-4" />}
+        title="List"
+        subtitle={data ? `Total ${data.total}` : undefined}
+      >
+        <div className="overflow-auto rounded-xl border border-slate-200">
+          <table className="min-w-[980px] w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr className="text-left text-slate-600">
+                <th className="px-4 py-3 font-semibold">Day / Date</th>
+                <th className="px-4 py-3 font-semibold">Title</th>
+                <th className="px-4 py-3 font-semibold">Target</th>
+                <th className="px-4 py-3 font-semibold">Window</th>
+                <th className="px-4 py-3 text-right font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-slate-400" colSpan={5}>
+                    Loading...
+                  </td>
+                </tr>
+              ) : (data?.data?.length ?? 0) === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-center text-slate-400" colSpan={5}>
+                    Tidak ada data.
+                  </td>
+                </tr>
+              ) : (
+                data!.data.map((a) => (
+                  <tr key={a.id} className="border-t border-slate-100">
+                    <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                      {fmtDayDate(a.published_at || a.created_at)}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      <div className="line-clamp-2">{a.title}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {a.scope === "global" ? (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                          Global
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                          {a.product_name || `Product #${a.product_id}`}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      <div className="text-xs">
+                        <div>Start: {a.starts_at ? new Date(a.starts_at).toLocaleString("id-ID") : "-"}</div>
+                        <div>End: {a.ends_at ? new Date(a.ends_at).toLocaleString("id-ID") : "-"}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="inline-flex gap-2">
+                        <Link className={adminGhostBtn} href={`/admin/announcements/${a.id}/edit`}>
+                          Edit
+                        </Link>
+                        <button
+                          className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                          onClick={() => onDelete(a.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-          <div className="flex flex-col md:flex-row md:items-end gap-3 justify-between">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full">
-              <div className="md:col-span-2">
-                <label className="text-xs font-semibold text-slate-600">Search</label>
-                <input
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Cari title/body..."
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-600">Scope</label>
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-                  value={scope}
-                  onChange={(e) => setScope(e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="global">Global</option>
-                  <option value="product">Product</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-600">Product</label>
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  disabled={loadingProducts}
-                >
-                  <option value="">All</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        {data ? (
+          <div className="mt-4 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div className="text-xs text-slate-500">
+              Page {data.current_page} / {data.last_page} • Total {data.total}
             </div>
 
-            <div className="flex gap-2">
-              <button
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-                onClick={() => {
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-600">Per page</label>
+              <select
+                className="h-9 rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                value={String(perPage)}
+                onChange={(e) => {
+                  setPerPage(Number(e.target.value));
                   setPage(1);
-                  load().catch(() => {});
                 }}
               >
-                Refresh
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+              </select>
+
+              <button className={adminGhostBtn} disabled={!canPrev} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                Prev
               </button>
-
-              <Link
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                href="/admin/announcements/new"
-              >
-                ➕ Create
-              </Link>
+              <button className={adminGhostBtn} disabled={!canNext} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </button>
             </div>
           </div>
-
-          {err ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>
-          ) : null}
-
-          <div className="overflow-auto rounded-xl border border-slate-200">
-            <table className="min-w-[980px] w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="text-left text-slate-600">
-                  <th className="px-4 py-3">Day / Date</th>
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Target</th>
-                  <th className="px-4 py-3">Window</th>
-                  <th className="px-4 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={5}>
-                      Loading...
-                    </td>
-                  </tr>
-                ) : (data?.data?.length ?? 0) === 0 ? (
-                  <tr>
-                    <td className="px-4 py-6 text-slate-500" colSpan={5}>
-                      Tidak ada data.
-                    </td>
-                  </tr>
-                ) : (
-                  data!.data.map((a) => (
-                    <tr key={a.id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                        {fmtDayDate(a.published_at || a.created_at)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-900 font-medium">
-                        <div className="line-clamp-2">{a.title}</div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {a.scope === "global" ? (
-                          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                            Global
-                          </span>
-                        ) : (
-                          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                            {a.product_name || `Product #${a.product_id}`}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        <div className="text-xs">
-                          <div>Start: {a.starts_at ? new Date(a.starts_at).toLocaleString("id-ID") : "-"}</div>
-                          <div>End: {a.ends_at ? new Date(a.ends_at).toLocaleString("id-ID") : "-"}</div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex gap-2">
-                          <Link
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs hover:bg-slate-50"
-                            href={`/admin/announcements/${a.id}/edit`}
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50"
-                            onClick={() => onDelete(a.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {data ? (
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="text-xs text-slate-500">
-                Page {data.current_page} / {data.last_page} • Total {data.total}
-              </div>
-
-              <div className="flex gap-2 items-center">
-                <label className="text-xs text-slate-600">Per page</label>
-                <select
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs bg-white"
-                  value={String(perPage)}
-                  onChange={(e) => {
-                    setPerPage(Number(e.target.value));
-                    setPage(1);
-                  }}
-                >
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                </select>
-
-                <button
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs disabled:opacity-50"
-                  disabled={!canPrev}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Prev
-                </button>
-                <button
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs disabled:opacity-50"
-                  disabled={!canNext}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </main>
+        ) : null}
+      </SectionCard>
+    </div>
   );
 }

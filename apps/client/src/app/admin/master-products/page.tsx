@@ -1,13 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Boxes, Plus, List, Trash2 } from "lucide-react";
 import {
   getMasterProducts,
   createMasterProduct,
   updateMasterProduct,
   deleteMasterProduct,
 } from "@/lib/inventory-items";
+import { PageHead, SectionCard, Field, adminInput, adminPrimaryBtn, adminGhostBtn, RowIcon } from "@/components/admin/ui";
 
 type MasterProduct = { id: number; name: string; product_type: string; is_active: boolean };
 
@@ -69,73 +70,86 @@ export default function MasterProductsPage() {
     }
   }
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="py-10 text-center text-sm text-slate-400">Loading...</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Master Products</h1>
-          <p className="text-slate-600">Katalog produk global yang dapat dipakai setiap organisasi.</p>
-        </div>
-      </div>
+      <PageHead
+        icon={<Boxes className="size-5" />}
+        title="Master Products"
+        subtitle="Katalog produk global yang dapat dipakai setiap organisasi"
+      />
 
       {error && (
-        <div className="border border-red-200 bg-red-50 text-red-700 p-3 rounded">{error}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
-      <div className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Tambah Master Product</h2>
-        <div className="space-y-3 max-w-md">
-          <input
-            className="border rounded px-3 py-2 w-full"
-            placeholder="Nama produk"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button
-            onClick={onCreate}
-            disabled={submitting || !name.trim()}
-            className="border rounded px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {submitting ? "Menyimpan..." : "Simpan"}
-          </button>
+      {/* Create */}
+      <SectionCard icon={<Plus className="size-4" />} iconTone="amber" title="Tambah Master Product">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Nama produk">
+            <input
+              className={adminInput}
+              placeholder="Nama produk"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
         </div>
-      </div>
+        <button onClick={onCreate} disabled={submitting || !name.trim()} className={`${adminPrimaryBtn} mt-4`}>
+          <Plus className="size-4" />
+          {submitting ? "Menyimpan..." : "Simpan"}
+        </button>
+      </SectionCard>
 
-      <div className="bg-white border rounded p-4">
-        <h2 className="font-semibold mb-3">Daftar Master Product</h2>
+      {/* List */}
+      <SectionCard icon={<List className="size-4" />} title="Daftar Master Product" subtitle={`${masters.length} produk`}>
         {masters.length === 0 ? (
-          <p className="text-slate-600 text-sm">Belum ada master product.</p>
+          <div className="py-6 text-center text-sm text-slate-400">Belum ada master product.</div>
         ) : (
           <div className="space-y-2">
             {masters.map((mp) => (
-              <div key={mp.id} className="border rounded p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{mp.name}</div>
-                  <div className="text-xs text-slate-600">
-                    Type: {mp.product_type} • Active: {mp.is_active ? "yes" : "no"}
+              <div
+                key={mp.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <RowIcon icon={<Boxes className="size-4" />} />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{mp.name}</span>
+                      <span
+                        className={
+                          mp.is_active
+                            ? "rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600"
+                            : "rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500"
+                        }
+                      >
+                        {mp.is_active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">Type: {mp.product_type}</div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    className="text-sm border rounded px-2 py-1 hover:bg-slate-50"
-                    onClick={() => onToggle(mp)}
-                  >
+                <div className="flex items-center gap-2">
+                  <button className={adminGhostBtn} onClick={() => onToggle(mp)}>
                     {mp.is_active ? "Disable" : "Enable"}
                   </button>
                   <button
-                    className="text-sm border rounded px-2 py-1 hover:bg-red-50"
                     onClick={() => onDelete(mp.id)}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                    aria-label="Delete"
                   >
-                    Delete
+                    <Trash2 className="size-4" />
                   </button>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }
