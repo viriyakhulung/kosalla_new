@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\TicketReportExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Ticket\StoreTicketRequest;
 use App\Models\Organization;
@@ -10,9 +11,12 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketCreatedNotification;
 use App\Services\NotificationRecipientService;
+use App\Services\TicketSlaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 
 class TicketController extends Controller
 {
@@ -69,7 +73,7 @@ class TicketController extends Controller
      * (ticket_comments.is_internal=false & bukan dari pembuat tiket).
      * GET /admin/organizations/{organization}/tickets
      */
-    public function adminIndex(Request $request, Organization $organization)
+    public function adminIndex(Request $request, Organization $organization, TicketSlaService $sla)
     {
         $perPage = (int) $request->query('per_page', 50);
         if ($perPage < 1) $perPage = 50;
@@ -79,6 +83,7 @@ class TicketController extends Controller
             ->where('organization_id', $organization->id)
             ->with([
                 'creator:id,name,email',
+                'closedBy:id,name',
                 'location:id,name',
                 'organization:id,name',
                 'inventoryItem:id,name',
@@ -115,7 +120,11 @@ class TicketController extends Controller
             }
         }
 
-        $paginator->getCollection()->transform(function ($t) use ($firstByTicket) {
+        // Ringkasan SLA dihitung atas page yang sama dgn yang FE terima (per_page=200).
+        $now = now();
+        $slaSummary = $sla->summary($paginator->getCollection(), $now);
+
+        $paginator->getCollection()->transform(function ($t) use ($firstByTicket, $sla, $now) {
             $c = $firstByTicket[$t->id] ?? null;
             // fallback bila akun pembalas sudah dihapus: tampilkan "User #id"
             $responder = $c
@@ -123,10 +132,76 @@ class TicketController extends Controller
                 : null;
             $t->setAttribute('first_response_at', $c?->created_at);
             $t->setAttribute('first_response_by', $responder);
+            // nama penutup tiket → field eksplisit (hindari bentrok key snake_case
+            // relasi closedBy dgn kolom integer closed_by saat serialisasi)
+            $t->setAttribute('closed_by_name', $t->closedBy?->name);
+            $t->unsetRelation('closedBy');
+
+            // SLA per-baris (durasi + status) — sumber kebenaran backend
+            $row = $sla->forTicket($t, $now);
+            $t->setAttribute('duration_ms', $row['duration_ms']);
+            $t->setAttribute('sla_status', $row['sla_status']);
             return $t;
         });
 
-        return response()->json($paginator);
+        // Pertahankan bentuk paginator (FE baca .data) + tambah sla_summary.
+        $payload = $paginator->toArray();
+        $payload['sla_summary'] = $slaSummary;
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Query tiket terfilter untuk export (TANPA paginate — export harus lengkap).
+     * Filter: organisasi (binding) + created_at between from/to + status.
+     */
+    private function ticketsForExport(Organization $organization, ?string $from, ?string $to, ?string $status)
+    {
+        return Ticket::query()
+            ->where('organization_id', $organization->id)
+            ->with(['creator:id,name', 'closedBy:id,name', 'location.branch'])
+            ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->orderBy('created_at')
+            ->get();
+    }
+
+    /**
+     * GET /admin/organizations/{organization}/tickets/export
+     * Export report tiket per organisasi ke .xlsx (ringkasan + data).
+     */
+    public function exportReport(Request $request, Organization $organization, TicketSlaService $sla)
+    {
+        $request->validate([
+            'from'   => ['nullable', 'date'],
+            'to'     => ['nullable', 'date', 'after_or_equal:from'],
+            'status' => ['nullable', 'in:open,in_progress,resolved,closed'],
+        ]);
+
+        $from   = $request->query('from');
+        $to     = $request->query('to');
+        $status = $request->query('status');
+
+        $tickets = $this->ticketsForExport($organization, $from, $to, $status);
+
+        // Ringkasan & SLA per-tiket dari sumber yang sama dgn dashboard (Fase 1).
+        // Catatan: ringkasan dihitung atas SELURUH tiket terfilter (bukan 1 halaman),
+        // jadi bisa beda dari kartu dashboard bila org > 200 tiket (beda cakupan, bukan formula).
+        $now = now();
+        $summary = $sla->summary($tickets, $now);
+        $perTicket = $tickets->mapWithKeys(fn ($t) => [$t->id => $sla->forTicket($t, $now)])->all();
+
+        $filename = sprintf(
+            'report-tiket-%s-%s.xlsx',
+            Str::slug($organization->name) ?: $organization->id,
+            now()->format('Ymd-His')
+        );
+
+        return Excel::download(
+            new TicketReportExport($organization, $tickets, $summary, $perTicket, $from, $to, $status),
+            $filename
+        );
     }
 
     /**

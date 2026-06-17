@@ -29,6 +29,7 @@ class TicketCloseController extends Controller
 
         $ticket->status = 'closed';
         $ticket->closed_at = now(); // opsional, kalau kolom ada
+        $ticket->closed_by = $request->user()->id; // siapa yang menutup
         $ticket->save();
 
         // === SEND EMAIL NOTIF: member tim yang di-attach ke org + creator ===

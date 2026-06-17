@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Ticket\LoginRequest;
+use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -108,6 +109,22 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * ✅ Update Profil (Self-service): hanya kolom kontak.
+     * Field name/email/role/org TIDAK bisa diubah lewat sini —
+     * UpdateProfileRequest hanya mengizinkan 4 kolom kontak via validated().
+     */
+    public function updateProfile(UpdateProfileRequest $request)
+    {
+        $user = $request->user();
+        $user->update($request->validated());
+
+        // Output identik dengan GET /auth/me agar FE konsisten.
+        return response()->json([
+            'user' => $this->userPayload($user->fresh()),
+        ]);
+    }
+
     // Helper Function: Returns detailed user data including roles, permissions, etc.
     private function userPayload(User $user): array
     {
@@ -118,6 +135,12 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+
+            // ✅ profil kontak (self-service)
+            'phone'        => $user->phone,
+            'address_line' => $user->address_line,
+            'city'         => $user->city,
+            'postal_code'  => $user->postal_code,
 
             // ✅ master role (ini yang dipakai FE)
             'master_role_id' => $user->master_role_id,

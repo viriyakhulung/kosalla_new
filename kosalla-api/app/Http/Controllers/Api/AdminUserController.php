@@ -6,16 +6,34 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AdminUser\StoreUserRequest;
 use App\Http\Requests\AdminUser\UpdateUserRequest;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
 class AdminUserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $search = trim((string) $request->query('search', ''));
+        $role   = trim((string) $request->query('role', ''));
+
         $users = User::query()
             ->with(['organization', 'location', 'masterRole'])
+            ->when($search !== '', function ($q) use ($search) {
+                // PostgreSQL: ilike = case-insensitive
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('email', 'ilike', "%{$search}%");
+                });
+            })
+            ->when($role !== '', function ($q) use ($role) {
+                // filter berdasarkan nama role di tabel master_roles
+                $q->whereHas('masterRole', function ($sub) use ($role) {
+                    $sub->where('name', $role);
+                });
+            })
             ->latest()
-            ->paginate(50);
+            ->paginate(50)
+            ->withQueryString();
 
         return $users;
     }

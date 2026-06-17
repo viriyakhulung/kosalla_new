@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Download,
   Inbox,
   Info,
   PlusCircle,
@@ -15,8 +16,8 @@ import {
   Timer,
 } from "lucide-react";
 import {
-  SLA_TARGET_HOURS,
-  computeMetrics,
+  buildMetrics,
+  exportOrgTickets,
   fetchOrgTickets,
   formatClock,
   formatDurationShort,
@@ -34,6 +35,14 @@ const PAGE_SIZE = 6;
 export function DashboardOverview() {
   const [orgId, setOrgId] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+
+  // filter export (tanggal created_at + status)
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const dateError = from !== "" && to !== "" && from > to;
 
   // daftar organisasi untuk selector
   const orgsQuery = useQuery({
@@ -56,6 +65,24 @@ export function DashboardOverview() {
     if (typeof window !== "undefined") localStorage.setItem(ORG_KEY, String(id));
   }
 
+  async function handleExport() {
+    if (orgId == null || dateError) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await exportOrgTickets(
+        orgId,
+        { from: from || undefined, to: to || undefined, status: statusFilter || undefined },
+        `report-tiket-${orgId}-${today}.xlsx`
+      );
+    } catch (e: any) {
+      setExportError(e?.message ?? "Gagal export report.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   // tiket org terpilih — polling real-time
   const { data, isLoading, isError, error, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["admin-dashboard-tickets", orgId],
@@ -67,8 +94,8 @@ export function DashboardOverview() {
   });
 
   const metrics = useMemo(
-    () => computeMetrics(data ?? [], dataUpdatedAt || Date.now()),
-    [data, dataUpdatedAt]
+    () => buildMetrics(data ?? { tickets: [], summary: null }),
+    [data]
   );
 
   const updatedLabel = dataUpdatedAt
@@ -122,15 +149,59 @@ export function DashboardOverview() {
             <span className="hidden text-slate-400 sm:inline">· diperbarui {updatedLabel}</span>
           </div>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={orgId == null}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* filter export: tanggal created_at + status */}
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label="Dari tanggal"
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+          />
+          <span className="text-xs text-slate-400">s/d</span>
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="Sampai tanggal"
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filter status"
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+          >
+            <option value="">Semua status</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+          </select>
+          <button
+            onClick={handleExport}
+            disabled={orgId == null || exporting || dateError}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-3 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-100 disabled:opacity-50"
+          >
+            <Download className={cn("size-3.5", exporting && "animate-pulse")} />
+            {exporting ? "Menyiapkan…" : "Export Excel"}
+          </button>
+          <button
+            onClick={() => refetch()}
+            disabled={orgId == null}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3.5", isFetching && "animate-spin")} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {(dateError || exportError) && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+          {dateError ? "Tanggal 'Dari' tidak boleh setelah 'Sampai'." : exportError}
+        </div>
+      )}
 
       {isError && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -184,7 +255,7 @@ export function DashboardOverview() {
             </span>
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            Rata-rata waktu penyelesaian (dibuat → closed) · target SLA {SLA_TARGET_HOURS} jam
+            Rata-rata waktu penyelesaian (dibuat → closed) · target SLA {metrics.targetHours} jam
           </p>
 
           {/* SLA progress (proporsi dalam SLA) */}
@@ -215,7 +286,7 @@ export function DashboardOverview() {
             <Info className="mt-0.5 size-3.5 shrink-0 text-slate-400" />
             <span>
               <b className="font-semibold text-slate-600">Lewat SLA</b> = waktu penyelesaian (dibuat → closed) melebihi target{" "}
-              {SLA_TARGET_HOURS} jam. Tiket yang <b className="font-semibold text-slate-600">belum closed</b> dihitung dari
+              {metrics.targetHours} jam. Tiket yang <b className="font-semibold text-slate-600">belum closed</b> dihitung dari
               lama berjalan sejak dibuat — jadi tiket lama yang belum selesai otomatis “Lewat SLA”.
             </span>
           </p>
@@ -268,10 +339,15 @@ export function DashboardOverview() {
                       </td>
                       <td className="py-3 pr-3">
                         {row.closedAt ? (
-                          <span className="inline-flex items-center gap-1.5 text-slate-600">
-                            <CheckCircle2 className="size-3.5 text-slate-400" />
-                            {formatClock(row.closedAt)}
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1.5 text-slate-600">
+                              <CheckCircle2 className="size-3.5 text-slate-400" />
+                              {formatClock(row.closedAt)}
+                            </span>
+                            <p className="mt-0.5 max-w-[130px] truncate text-xs text-slate-400">
+                              {row.closedBy ?? "—"}
+                            </p>
+                          </>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}

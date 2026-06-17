@@ -26,6 +26,12 @@ class User extends Authenticatable
         'can_create',
         'can_review',
         'can_publish',
+
+        // ✅ Profil kontak (self-service)
+        'phone',
+        'address_line',
+        'city',
+        'postal_code',
     ];
 
     protected $hidden = [

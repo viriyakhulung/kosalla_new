@@ -38,6 +38,7 @@ class Ticket extends Model
         'last_activity_at',
         'resolved_at',
         'closed_at',
+        'closed_by',
     ];
 
     protected $casts = [
@@ -67,6 +68,11 @@ class Ticket extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function closedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
     }
 
     public function teamGroup(): BelongsTo

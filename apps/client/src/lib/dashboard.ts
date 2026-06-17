@@ -1,10 +1,7 @@
 import type { Ticket } from "@/types";
+import { downloadWithAuth } from "@/lib/api";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://api.kosalla.viriyadb.com";
-
-/** Target SLA penyelesaian tiket (jam), dihitung dari dibuat → di-close. Ubah sesuai kebijakan. */
-export const SLA_TARGET_HOURS = 4;
-const SLA_TARGET_MS = SLA_TARGET_HOURS * 60 * 60 * 1000;
 
 /** Bentuk tiket dari endpoint admin (paginator Laravel) + kolom turunan. */
 export type RawTicket = Ticket & {
@@ -13,7 +10,29 @@ export type RawTicket = Ticket & {
   closed_at?: string | null;
   /** waktu tiket di-resolve (kolom tickets.resolved_at) */
   resolved_at?: string | null;
+  /** nama user yang menutup tiket (field turunan dari adminIndex: closedBy?->name) */
+  closed_by_name?: string | null;
+  /** durasi SLA (ms) — dihitung backend (TicketSlaService) */
+  duration_ms?: number | null;
+  /** status SLA per tiket — dihitung backend: within | breached | pending */
+  sla_status?: "within" | "breached" | "pending" | null;
 };
+
+/** Ringkasan SLA agregat dari backend (TicketSlaService::summary). */
+export type SlaSummary = {
+  total: number;
+  open: number;
+  closed: number;
+  resolved_count: number;
+  within_sla: number;
+  breached_sla: number;
+  avg_ms: number | null;
+  sla_pct: number | null;
+  target_hours: number;
+};
+
+/** Paket data dashboard: baris tiket + ringkasan SLA (sumber kebenaran backend). */
+export type DashboardData = { tickets: RawTicket[]; summary: SlaSummary | null };
 
 function getToken() {
   if (typeof window === "undefined") return null;
@@ -31,7 +50,7 @@ function normalizeTickets(json: any): RawTicket[] {
  * Ambil tiket untuk SATU organisasi (dipilih superadmin).
  * Endpoint: GET /api/admin/organizations/{orgId}/tickets
  */
-export async function fetchOrgTickets(orgId: number): Promise<RawTicket[]> {
+export async function fetchOrgTickets(orgId: number): Promise<DashboardData> {
   const token = getToken();
   if (!token) throw new Error("Unauthenticated");
 
@@ -41,7 +60,31 @@ export async function fetchOrgTickets(orgId: number): Promise<RawTicket[]> {
   });
   const json = await res.json().catch(() => null);
   if (!res.ok) throw new Error(json?.message ?? `Request failed (${res.status})`);
-  return normalizeTickets(json);
+  return {
+    tickets: normalizeTickets(json),
+    summary: (json?.sla_summary as SlaSummary | undefined) ?? null,
+  };
+}
+
+/**
+ * Export report tiket 1 organisasi ke .xlsx (filter tanggal + status).
+ * Pakai downloadWithAuth() (Bearer → blob → anchor). Nama file wajib di-set
+ * di FE karena download via blob memakai atribut anchor (Content-Disposition diabaikan).
+ */
+export async function exportOrgTickets(
+  orgId: number,
+  opts: { from?: string; to?: string; status?: string },
+  filename: string
+): Promise<void> {
+  const qs = new URLSearchParams();
+  if (opts.from) qs.set("from", opts.from);
+  if (opts.to) qs.set("to", opts.to);
+  if (opts.status) qs.set("status", opts.status);
+
+  const url = `${API_URL}/api/admin/organizations/${orgId}/tickets/export${
+    qs.toString() ? `?${qs.toString()}` : ""
+  }`;
+  await downloadWithAuth(url, filename);
 }
 
 /* ------------------------------------------------------------------ */
@@ -71,6 +114,7 @@ export type ActivityRow = {
   createdAt: string | null;
   createdBy: string | null; // siapa yang membuat
   closedAt: string | null; // waktu tiket di-close (null bila belum)
+  closedBy: string | null; // siapa yang menutup (null bila belum/data lama)
   durationMs: number | null; // closed−created, atau elapsed (now−created) bila belum closed
   pending: boolean; // true = belum closed
   breached: boolean;
@@ -86,6 +130,7 @@ export type DashboardMetrics = {
   withinSlaCount: number;
   breachedCount: number;
   slaPct: number | null;
+  targetHours: number;
   activity: ActivityRow[];
 };
 
@@ -96,66 +141,38 @@ function ms(s?: string | null): number | null {
   return Number.isNaN(v) ? null : v;
 }
 
-export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetrics {
-  let closedCount = 0;
+/**
+ * Bangun objek metrik dashboard dari data backend.
+ *
+ * SLA tidak lagi dihitung di FE — semua angka (durasi, klasifikasi, agregat)
+ * berasal dari TicketSlaService di backend (sumber kebenaran tunggal).
+ * FE hanya memetakan & memformat.
+ */
+export function buildMetrics(data: DashboardData): DashboardMetrics {
+  const tickets = data.tickets ?? [];
+  const s = data.summary;
 
-  let resolvedCount = 0;
-  let withinSlaCount = 0;
-  let breachedCount = 0;
-  let durationSum = 0;
-
-  const rows: ActivityRow[] = [];
-
-  for (const t of tickets) {
-    const isClosed = normalizeStatus(t.status) === "closed";
-    if (isClosed) closedCount += 1;
-
-    const createdMs = ms(t.created_at);
-    const closedAt = t.closed_at ?? null;
-    const closedMs = ms(closedAt);
-
-    let durationMs: number | null = null;
-    let pending = true;
-    let breached = false;
-
-    if (isClosed) {
-      // tiket selesai → SLA = waktu penyelesaian (closed − created)
-      pending = false;
-      if (closedMs != null && createdMs != null) {
-        durationMs = closedMs - createdMs;
-        resolvedCount += 1;
-        durationSum += durationMs;
-        if (durationMs <= SLA_TARGET_MS) withinSlaCount += 1;
-        else {
-          breached = true;
-          breachedCount += 1;
-        }
-      }
-      // closed tanpa closed_at (data lama) → durasi tak diketahui, tak dihitung ke SLA
-    } else if (createdMs != null) {
-      // belum closed → elapsed berjalan untuk deteksi pelanggaran SLA
-      durationMs = now - createdMs;
-      breached = durationMs > SLA_TARGET_MS;
-      if (breached) breachedCount += 1;
-    }
-
-    rows.push({
+  const rows: ActivityRow[] = tickets.map((t) => {
+    const status = t.sla_status ?? null;
+    return {
       id: t.id,
       code: t.ticket_number || `#${t.id}`,
       subject: t.subject || `Tiket #${t.id}`,
       createdAt: t.created_at ?? null,
       createdBy: t.creator?.name ?? null,
-      closedAt,
-      durationMs,
-      pending,
-      breached,
-    });
-  }
+      closedAt: t.closed_at ?? null,
+      closedBy: t.closed_by_name ?? null,
+      durationMs: t.duration_ms ?? null,
+      pending: status === "pending",
+      breached: status === "breached",
+    };
+  });
 
   rows.sort((a, b) => (ms(b.createdAt) ?? 0) - (ms(a.createdAt) ?? 0));
 
-  const total = tickets.length;
-  const openCount = total - closedCount; // semua yang belum closed dianggap "Open"
+  const total = s?.total ?? tickets.length;
+  const openCount = s?.open ?? 0;
+  const closedCount = s?.closed ?? 0;
 
   // Hanya dua status: Open & Closed
   const slices: StatusSlice[] = [
@@ -168,11 +185,12 @@ export function computeMetrics(tickets: RawTicket[], now: number): DashboardMetr
     open: openCount,
     closed: closedCount,
     slices,
-    avgResolutionMs: resolvedCount ? durationSum / resolvedCount : null,
-    resolvedCount,
-    withinSlaCount,
-    breachedCount,
-    slaPct: resolvedCount ? Math.round((withinSlaCount / resolvedCount) * 100) : null,
+    avgResolutionMs: s?.avg_ms ?? null,
+    resolvedCount: s?.resolved_count ?? 0,
+    withinSlaCount: s?.within_sla ?? 0,
+    breachedCount: s?.breached_sla ?? 0,
+    slaPct: s?.sla_pct ?? null,
+    targetHours: s?.target_hours ?? 4,
     activity: rows,
   };
 }
@@ -199,9 +217,16 @@ export function formatDurationShort(msVal: number | null): string {
   return m ? `${h}j ${m}m` : `${h} jam`;
 }
 
-/** "09:34" (zona waktu lokal) */
+/** "10/06/2026 14.09" (DD/MM/YYYY HH.MM, zona waktu lokal) */
 export function formatClock(s: string | null): string {
   const v = ms(s);
   if (v == null) return "—";
-  return new Date(v).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const d = new Date(v);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dd = pad(d.getDate());
+  const mm = pad(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  return `${dd}/${mm}/${yyyy} ${hh}.${min}`;
 }

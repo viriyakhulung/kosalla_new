@@ -19,6 +19,8 @@ class TicketStatusController extends Controller
             'last_activity_at' => now(),
             'resolved_at' => in_array($data['status'], ['resolved','closed']) ? now() : null,
             'closed_at' => $data['status'] === 'closed' ? now() : null,
+            // sinkron dgn closed_at: terisi saat closed, di-null-kan saat reopen
+            'closed_by' => $data['status'] === 'closed' ? $request->user()->id : null,
         ]);
 
         return $ticket->load(['assignee','teamGroup']);

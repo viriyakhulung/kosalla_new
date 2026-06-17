@@ -69,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
      */
     Route::prefix('auth')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+        Route::put('/profile', [AuthController::class, 'updateProfile']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/change-password', [AuthController::class, 'changePassword']);
     });
@@ -188,6 +189,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Admin: ticket overview per organisasi (dashboard SLA, cross-org)
             Route::get('organizations/{organization}/tickets', [TicketController::class, 'adminIndex']);
+
+            // Admin: export report tiket per organisasi (.xlsx, filter tanggal+status)
+            Route::get('organizations/{organization}/tickets/export', [TicketController::class, 'exportReport']);
 
             // organisation_attach_teams: kelola tim yang di-attach ke organisasi
             Route::get('organizations/{organization}/teams', [OrganizationTeamController::class, 'index']);

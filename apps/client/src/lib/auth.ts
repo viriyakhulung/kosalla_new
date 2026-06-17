@@ -114,6 +114,45 @@ export async function logout() {
   await clearSessionCookie();
 }
 
+export type ProfileContact = {
+  phone?: string | null;
+  address_line?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+};
+
+export async function updateProfile(payload: ProfileContact) {
+  const token = getTokenClient();
+  if (!token) throw new Error("Unauthenticated");
+
+  const res = await fetch(`${API_BASE}/auth/profile`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg =
+      data?.message ||
+      data?.errors?.phone?.[0] ||
+      data?.errors?.address_line?.[0] ||
+      data?.errors?.city?.[0] ||
+      data?.errors?.postal_code?.[0] ||
+      `Update profil gagal (${res.status})`;
+    throw new Error(msg);
+  }
+
+  // backend mengembalikan { user: {...} } (identik GET /auth/me)
+  return data;
+}
+
 export async function changePassword(
   current_password: string,
   password: string,

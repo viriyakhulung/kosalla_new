@@ -35,8 +35,12 @@ export type AdminUser = {
   masterRole?: any;
 };
 
-export async function getUsers() {
-  return apiFetch("/api/admin/users"); // paginate object
+export async function getUsers(params?: { search?: string; role?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set("search", params.search);
+  if (params?.role) qs.set("role", params.role);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch(`/api/admin/users${suffix}`); // paginate object
 }
 
 export async function createUser(payload: {

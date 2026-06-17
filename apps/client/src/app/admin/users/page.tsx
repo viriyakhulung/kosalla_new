@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Users, UserPlus, ShieldCheck, User as UserIcon, List, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Users,
+  UserPlus,
+  ShieldCheck,
+  User as UserIcon,
+  List,
+  Trash2,
+  X,
+  Mail,
+  Building2,
+  MapPin,
+  Phone,
+  Home,
+} from "lucide-react";
 import { getOrganizations } from "@/lib/organizations";
 import { getLocations } from "@/lib/locations";
 import { createUser, deleteUser, getMasterRoles, getUsers } from "@/lib/users";
@@ -26,6 +39,9 @@ function userInitials(name?: string | null): string {
     String(name ?? "").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "U"
   );
 }
+function fieldVal(value?: string | null): string {
+  return value && String(value).trim() !== "" ? String(value) : "—";
+}
 
 export default function AdminUsersPage() {
   const [error, setError] = useState<string>("");
@@ -34,6 +50,14 @@ export default function AdminUsersPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+
+  // drawer detail user (read-only)
+  const [detailUser, setDetailUser] = useState<any | null>(null);
+
+  // filter & search (eksekusi di backend)
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState(""); // "" = semua role
+  const [total, setTotal] = useState(0);
 
   // locations (hidden in UI, but used for auto-assign)
   const [locs, setLocs] = useState<Loc[]>([]);
@@ -64,9 +88,10 @@ export default function AdminUsersPage() {
     return locs[0] ?? null;
   }, [selectedOrgId, locs, locationId]);
 
-  async function refreshUsers() {
-    const json = await getUsers();
+  async function refreshUsers(params?: { search?: string; role?: string }) {
+    const json = await getUsers(params);
     setUsers(Array.isArray(json?.data) ? json.data : []);
+    setTotal(typeof json?.total === "number" ? json.total : (Array.isArray(json?.data) ? json.data.length : 0));
   }
 
   useEffect(() => {
@@ -88,8 +113,7 @@ export default function AdminUsersPage() {
 
         setOrgs(orgsArr);
         setRoles(Array.isArray(roleJson) ? roleJson : []);
-
-        await refreshUsers();
+        // daftar user di-fetch oleh effect debounce (search/roleFilter) di bawah
       } catch (e: any) {
         setError(e?.message ?? "Gagal load data");
       } finally {
@@ -97,6 +121,26 @@ export default function AdminUsersPage() {
       }
     })();
   }, []);
+
+  // fetch user saat search/roleFilter berubah (debounce 350ms) — termasuk load awal
+  useEffect(() => {
+    const t = setTimeout(() => {
+      refreshUsers({ search, role: roleFilter }).catch((e: any) =>
+        setError(e?.message ?? "Gagal load users")
+      );
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search, roleFilter]);
+
+  // tutup drawer detail dengan Esc
+  useEffect(() => {
+    if (!detailUser) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDetailUser(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailUser]);
 
   // fetch locations when org changes (hidden)
   useEffect(() => {
@@ -173,7 +217,7 @@ export default function AdminUsersPage() {
       setPassword("");
       // jangan reset org/role/location -> biar bisa create cepat tanpa null lagi
 
-      await refreshUsers();
+      await refreshUsers({ search, role: roleFilter });
     } catch (e: any) {
       setError(e?.message ?? "Gagal create user");
     } finally {
@@ -185,7 +229,7 @@ export default function AdminUsersPage() {
     try {
       setError("");
       await deleteUser(id);
-      await refreshUsers();
+      await refreshUsers({ search, role: roleFilter });
     } catch (e: any) {
       setError(e?.message ?? "Gagal delete user");
     }
@@ -332,9 +376,44 @@ export default function AdminUsersPage() {
       </SectionCard>
 
       {/* List */}
-      <SectionCard icon={<List className="size-4" />} title="List" subtitle={`${users.length} pengguna terdaftar`}>
+      <SectionCard
+        icon={<List className="size-4" />}
+        title="List"
+        subtitle={
+          search || roleFilter
+            ? `Menampilkan ${users.length} dari ${total} user`
+            : `${total} pengguna terdaftar`
+        }
+      >
+        {/* Filter & Search */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+          <input
+            type="text"
+            className={adminInput}
+            placeholder="Cari nama atau email…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className={cn(adminInput, "sm:max-w-[14rem]")}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="">Semua role</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.name}>
+                {roleBadge(r.name.toLowerCase()).label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {users.length === 0 ? (
-          <div className="py-6 text-center text-sm text-slate-400">No users</div>
+          <div className="py-6 text-center text-sm text-slate-400">
+            {search || roleFilter
+              ? "Tidak ada user yang cocok dengan pencarian."
+              : "No users"}
+          </div>
         ) : (
           <div className="space-y-2">
             {users.map((u) => {
@@ -342,7 +421,16 @@ export default function AdminUsersPage() {
               return (
                 <div
                   key={u.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailUser(u)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setDetailUser(u);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 transition-colors hover:border-teal-300 hover:bg-teal-50/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
@@ -363,7 +451,10 @@ export default function AdminUsersPage() {
                   </div>
 
                   <button
-                    onClick={() => onDelete(u.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(u.id);
+                    }}
                     className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
                     aria-label="Delete"
                   >
@@ -375,6 +466,109 @@ export default function AdminUsersPage() {
           </div>
         )}
       </SectionCard>
+
+      {/* Drawer Detail User (read-only) */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 transition-opacity duration-300",
+          detailUser ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+      >
+        {/* overlay */}
+        <div
+          className="absolute inset-0 bg-black/40"
+          onClick={() => setDetailUser(null)}
+        />
+
+        {/* panel kanan */}
+        <aside
+          className={cn(
+            "absolute right-0 top-0 flex h-full w-full max-w-[30rem] flex-col overflow-y-auto bg-white shadow-2xl transition-transform duration-300",
+            detailUser ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          {detailUser && (
+            <>
+              {/* header */}
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
+                    {userInitials(detailUser.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-bold text-slate-900">
+                      {fieldVal(detailUser.name)}
+                    </p>
+                    <span
+                      className={cn(
+                        "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                        roleBadge(userRoleName(detailUser)).cls
+                      )}
+                    >
+                      {roleBadge(userRoleName(detailUser)).label}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailUser(null)}
+                  aria-label="Tutup"
+                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              {/* body */}
+              <div className="space-y-6 px-6 py-5">
+                {/* Identitas */}
+                <section className="space-y-3">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                    Identitas
+                  </h3>
+                  <DetailField icon={<Mail className="size-4" />} label="Email" value={fieldVal(detailUser.email)} />
+                  <DetailField icon={<Building2 className="size-4" />} label="Organisasi" value={fieldVal(detailUser.organization?.name)} />
+                  <DetailField icon={<MapPin className="size-4" />} label="Lokasi" value={fieldVal(detailUser.location?.name)} />
+                </section>
+
+                {/* Kontak */}
+                <section className="space-y-3">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                    Kontak
+                  </h3>
+                  <DetailField icon={<Phone className="size-4" />} label="Telepon" value={fieldVal(detailUser.phone)} />
+                  <DetailField icon={<Home className="size-4" />} label="Alamat" value={fieldVal(detailUser.address_line)} />
+                  <DetailField icon={<Building2 className="size-4" />} label="Kota" value={fieldVal(detailUser.city)} />
+                  <DetailField icon={<MapPin className="size-4" />} label="Kode Pos" value={fieldVal(detailUser.postal_code)} />
+                </section>
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function DetailField({
+  icon,
+  label,
+  value,
+}: {
+  icon?: ReactNode;
+  label: string;
+  value: string;
+}) {
+  const empty = value === "—";
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</p>
+      <div className="mt-1 flex items-center gap-2">
+        {icon && <span className="text-slate-400">{icon}</span>}
+        <p className={cn("truncate text-sm font-semibold", empty ? "italic text-slate-300" : "text-slate-900")}>
+          {value}
+        </p>
+      </div>
     </div>
   );
 }
