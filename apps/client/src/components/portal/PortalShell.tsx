@@ -8,6 +8,7 @@ import {
   Ticket,
   PlusCircle,
   BookOpen,
+  ListChecks,
   User,
   Menu,
   X,
@@ -18,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth";
 import { ViriyaLogo } from "@/components/ViriyaLogo";
+import { useClientSession } from "@/hooks/useClientSession";
 
 const COLLAPSE_KEY = "kosalla_portal_sidebar_collapsed";
 
@@ -28,6 +30,7 @@ interface NavItem {
   icon: React.ElementType;
   exact?: boolean;
   hideForStaff?: boolean;
+  requiresCreate?: boolean;
 }
 
 const PORTAL_SECTIONS: Array<{ section: string; items: NavItem[] }> = [
@@ -47,6 +50,12 @@ const PORTAL_SECTIONS: Array<{ section: string; items: NavItem[] }> = [
         href: "/portal/tutorial",
         staffHref: "/portal/manage/tutorial",
         icon: BookOpen,
+      },
+      {
+        label: "Wizard Knowledge Base",
+        href: "/portal/manage/tutorial/wizard",
+        icon: ListChecks,
+        requiresCreate: true,
       },
     ],
   },
@@ -94,6 +103,7 @@ export function PortalShell({
 }: PortalShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { perms } = useClientSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -204,6 +214,7 @@ export function PortalShell({
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   if (item.hideForStaff && isStaff) return null;
+                  if (item.requiresCreate && !perms.canCreate) return null;
                   const href =
                     item.staffHref && isStaff ? item.staffHref : item.href;
                   const active =

@@ -1,10 +1,11 @@
 "use client";
 
+import React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import ImplementasiForm from "./ImplementasiForm";
+import TutorialWizard from "../new/TutorialWizard";
 
-export default function CreateArticlePage() {
+export default function TutorialWizardPage() {
   const router = useRouter();
 
   return (
@@ -12,8 +13,8 @@ export default function CreateArticlePage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Create Article</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Draft → Review → Publish</p>
+          <h2 className="text-xl font-bold text-slate-900">Wizard Knowledge Base</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Pembuatan terpandu: Konten → Review</p>
         </div>
         <button
           type="button"
@@ -25,7 +26,7 @@ export default function CreateArticlePage() {
         </button>
       </div>
 
-      <ImplementasiForm />
+      <TutorialWizard />
     </div>
   );
 }
