@@ -10,26 +10,44 @@ import {
   UploadCloud,
   Loader2,
   Ban,
-  Package,
-  Type,
-  FileText,
   Lock,
+  CheckCircle2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
 import { useClientSession } from "@/hooks/useClientSession";
 import { cn } from "@/lib/utils";
-import { Stepper, type Step } from "@/components/ui/Stepper";
+import { Stepper, type Step, type StepState } from "@/components/ui/Stepper";
 
 type Product = { id: number; name: string };
 type MasterProductsResp = { data: Product[] };
 
-type BusyAction = null | "next" | "draft" | "submit" | "publish";
+type BusyAction = null | "next" | "submit" | "publish";
 
-const STEPS: Step[] = [
-  { id: "content", label: "Konten" },
-  { id: "review", label: "Review" },
+type StepMeta = { id: string; label: string; desc: string; covers: string[] };
+
+const STEP_META: StepMeta[] = [
+  {
+    id: "basics",
+    label: "Produk & Judul",
+    desc: "Pilih produk terkait dan beri judul artikel.",
+    covers: ["Pilih produk terkait", "Tulis judul artikel"],
+  },
+  {
+    id: "content",
+    label: "Konten",
+    desc: "Tulis isi artikel dengan editor.",
+    covers: ["Tulis isi artikel", "Sisipkan gambar / tabel / admonition"],
+  },
+  {
+    id: "review",
+    label: "Review",
+    desc: "Periksa pratinjau sebelum submit.",
+    covers: ["Periksa pratinjau", "Submit untuk review / publish"],
+  },
 ];
+
+const STEPS: Step[] = STEP_META.map((s) => ({ id: s.id, label: s.label }));
 
 // Styling render body_html — disamakan dengan halaman detail tutorial ([slug])
 // agar preview di Step Review tampil identik dengan hasil akhir.
@@ -53,8 +71,6 @@ function SubmittingOverlay({ action }: { action: BusyAction }) {
   const text =
     action === "next"
       ? "Menyimpan draft…"
-      : action === "draft"
-      ? "Saving draft…"
       : action === "submit"
       ? "Submitting review…"
       : action === "publish"
@@ -79,24 +95,30 @@ function SubmittingOverlay({ action }: { action: BusyAction }) {
   );
 }
 
-function SectionCard({
-  icon,
+function Panel({
   title,
   children,
+  className = "",
 }: {
-  icon: React.ReactNode;
-  title: string;
+  title?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-600">
-          {icon}
-        </div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">{title}</h3>
-      </div>
-      <div className="p-5">{children}</div>
+    <div className={cn("rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", className)}>
+      {title && (
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-teal-600">{title}</h3>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function InfoCard({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -106,7 +128,7 @@ const inputCls =
   "placeholder-slate-400 transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-60";
 
 /**
- * Mode "Tutorial": wizard multi-step (Konten → Review).
+ * Mode "Tutorial": wizard 3 step (Produk & Judul → Konten → Review).
  * Header & navigasi mode diatur oleh container (page.tsx).
  */
 export default function TutorialWizard() {
@@ -146,6 +168,16 @@ export default function TutorialWizard() {
     return products.find((p) => p.id === productId)?.name ?? null;
   }, [productId, products]);
 
+  // Status tiap step untuk Stepper: Review (index 2) LOCKED selama draft belum tersimpan.
+  const statuses = useMemo<StepState[]>(() => {
+    return STEPS.map((_, i) => {
+      if (i < stepIndex) return "done";
+      if (i === stepIndex) return "active";
+      if (i === 2 && articleId === null) return "locked";
+      return "todo";
+    });
+  }, [stepIndex, articleId]);
+
   async function loadMeta() {
     setLoadingMeta(true);
     setError("");
@@ -184,23 +216,25 @@ export default function TutorialWizard() {
     );
   }
 
-  const validateContent = () => {
-    if (productId === "") return "Product wajib dipilih.";
-    if (!title.trim()) return "Title wajib diisi.";
-    if (!bodyHtml || bodyHtml.trim() === "<p></p>") return "Content masih kosong.";
-    return "";
+  const productLocked = articleId !== null;
+
+  // Step 0 → 1: hanya validasi produk + judul (belum ada API).
+  const handleNextFromBasics = () => {
+    setError("");
+    if (productId === "") return setError("Product wajib dipilih.");
+    if (!title.trim()) return setError("Title wajib diisi.");
+    setStepIndex(1);
   };
 
-  // Step 1 → Review: draft lahir di sini (store butuh product+title+body — sudah lengkap),
+  // Step 1 → 2: draft lahir di sini (store butuh product+title+body — sudah lengkap),
   // atau di-update via PUT bila draft sudah pernah tercipta (kembali-maju antar step).
   const handleNextFromContent = async () => {
     if (saving) return;
-    const v = validateContent();
-    if (v) return setError(v);
+    setError("");
+    if (!bodyHtml || bodyHtml.trim() === "<p></p>") return setError("Content masih kosong.");
 
     setSaving(true);
     setBusyAction("next");
-    setError("");
     try {
       if (articleId === null) {
         const created: any = await apiFetch("/portal/user-articles", {
@@ -221,7 +255,7 @@ export default function TutorialWizard() {
           body: JSON.stringify({ title: title.trim(), body_html: bodyHtml }),
         });
       }
-      setStepIndex(1);
+      setStepIndex(2);
     } catch (e: any) {
       setError(e?.message ?? "Gagal menyimpan draft.");
     } finally {
@@ -230,8 +264,7 @@ export default function TutorialWizard() {
     }
   };
 
-  // Step Review: simpan sebagai draft & keluar. Artikel sudah ter-store di Step 1,
-  // jadi cukup navigasi kembali ke daftar.
+  // Step Review: simpan sebagai draft & keluar. Artikel sudah ter-store di Step Konten.
   const handleSaveDraftAndExit = () => {
     if (saving) return;
     router.push("/portal/manage/tutorial");
@@ -270,7 +303,7 @@ export default function TutorialWizard() {
     }
   };
 
-  const productLocked = articleId !== null;
+  const meta = STEP_META[stepIndex];
 
   return (
     <>
@@ -278,8 +311,15 @@ export default function TutorialWizard() {
 
       <div className={cn("space-y-5", saving && "pointer-events-none select-none")}>
         {/* Stepper */}
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-          <Stepper steps={STEPS} currentIndex={stepIndex} />
+        <Panel>
+          <Stepper steps={STEPS} currentIndex={stepIndex} statuses={statuses} />
+        </Panel>
+
+        {/* STEP DETAIL */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Step Detail</p>
+          <h2 className="mt-1 text-lg font-bold text-slate-900">{meta.label}</h2>
+          <p className="mt-0.5 text-sm text-slate-500">{meta.desc}</p>
         </div>
 
         {error && (
@@ -289,79 +329,98 @@ export default function TutorialWizard() {
           </div>
         )}
 
-        {/* ================= STEP 1: KONTEN ================= */}
-        {stepIndex === 0 && (
-          <>
-            {/* Product */}
-            <SectionCard icon={<Package className="size-4" />} title="Product">
-              <select
-                className={inputCls}
-                value={productId === "" ? "" : String(productId)}
-                onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}
-                disabled={loadingMeta || saving || productLocked}
-              >
-                <option value="">— Select Product —</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              {productLocked ? (
-                <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
-                  <Lock className="size-3.5" />
-                  Produk tidak dapat diubah setelah draft dibuat. Untuk produk lain, buat artikel baru.
-                </p>
-              ) : (
-                products.length === 0 &&
-                !loadingMeta && (
-                  <p className="mt-2 text-xs text-red-600">
-                    Product list kosong. Pastikan endpoint <b>/api/portal/master-products</b> bisa diakses.
+        {/* WORK ON THIS STEP */}
+        <Panel title="Work on this step">
+          {/* ---- STEP 0: PRODUK & JUDUL ---- */}
+          {stepIndex === 0 && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700">Product</label>
+                <select
+                  className={cn(inputCls, "mt-1")}
+                  value={productId === "" ? "" : String(productId)}
+                  onChange={(e) => setProductId(e.target.value ? Number(e.target.value) : "")}
+                  disabled={loadingMeta || saving || productLocked}
+                >
+                  <option value="">— Select Product —</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {productLocked ? (
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                    <Lock className="size-3.5" />
+                    Produk tidak dapat diubah setelah draft dibuat. Untuk produk lain, buat artikel baru.
                   </p>
-                )
-              )}
-            </SectionCard>
+                ) : (
+                  products.length === 0 &&
+                  !loadingMeta && (
+                    <p className="mt-2 text-xs text-red-600">
+                      Product list kosong. Pastikan endpoint <b>/api/portal/master-products</b> bisa diakses.
+                    </p>
+                  )
+                )}
+              </div>
 
-            {/* Title */}
-            <SectionCard icon={<Type className="size-4" />} title="Title">
-              <input
-                className={inputCls}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Contoh: Cara cek versi Tibero"
-                disabled={saving}
-              />
-            </SectionCard>
+              <div>
+                <label className="text-sm font-medium text-slate-700">Title</label>
+                <input
+                  className={cn(inputCls, "mt-1")}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Contoh: Cara cek versi Tibero"
+                  disabled={saving}
+                />
+              </div>
 
-            {/* Content */}
-            <SectionCard icon={<FileText className="size-4" />} title="Content (HTML)">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleNextFromBasics}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700"
+                >
+                  Lanjut ke Konten
+                  <ArrowRight className="size-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ---- STEP 1: KONTEN ---- */}
+          {stepIndex === 1 && (
+            <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-2">
                 <RichTextEditorClient value={bodyHtml} onChange={setBodyHtml} />
               </div>
-            </SectionCard>
 
-            {/* Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs text-slate-500">
-                Jangan tutup halaman sebelum lanjut ke Review — draft baru tersimpan setelah langkah ini.
-              </p>
-              <button
-                type="button"
-                onClick={handleNextFromContent}
-                disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
-              >
-                {saving && busyAction === "next" ? "Menyimpan…" : "Lanjut ke Review"}
-                <ArrowRight className="size-4" />
-              </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStepIndex(0)}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <ArrowLeft className="size-4" />
+                  Kembali
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextFromContent}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
+                >
+                  {saving && busyAction === "next" ? "Menyimpan…" : "Lanjut ke Review"}
+                  <ArrowRight className="size-4" />
+                </button>
+              </div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* ================= STEP 2: REVIEW ================= */}
-        {stepIndex === 1 && (
-          <>
-            <SectionCard icon={<FileText className="size-4" />} title="Preview Artikel">
+          {/* ---- STEP 2: REVIEW ---- */}
+          {stepIndex === 2 && (
+            <div className="space-y-4">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   {productName && (
@@ -379,68 +438,94 @@ export default function TutorialWizard() {
                 <hr className="border-slate-100" />
                 <div className={`kb-content ${PROSE}`} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
               </div>
-            </SectionCard>
 
-            {/* Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs text-slate-500">
-                {isFullAccess ? (
-                  <>
-                    Mode <b>Full Access</b>: kamu bisa <b>Publish langsung</b> (auto approve + publish).
-                  </>
-                ) : (
-                  <>Catatan: Publish hanya bisa dilakukan setelah artikel di-approve reviewer.</>
-                )}
-              </p>
+              <hr className="border-slate-100" />
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStepIndex(0)}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
-                >
-                  <ArrowLeft className="size-4" />
-                  Kembali
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-500">
+                  {isFullAccess ? (
+                    <>
+                      Mode <b>Full Access</b>: kamu bisa <b>Publish langsung</b> (auto approve + publish).
+                    </>
+                  ) : (
+                    <>Catatan: Publish hanya bisa dilakukan setelah artikel di-approve reviewer.</>
+                  )}
+                </p>
 
-                <button
-                  type="button"
-                  onClick={handleSaveDraftAndExit}
-                  disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
-                >
-                  <Save className="size-4" />
-                  Simpan sebagai Draft
-                </button>
-
-                {canSubmitReview && (
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleSubmitReview}
+                    onClick={() => setStepIndex(1)}
                     disabled={saving}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
                   >
-                    <Send className="size-4" />
-                    {saving && busyAction === "submit" ? "Submitting…" : "Submit Review"}
+                    <ArrowLeft className="size-4" />
+                    Kembali
                   </button>
-                )}
 
-                {canPublishNow && (
                   <button
                     type="button"
-                    onClick={handlePublish}
+                    onClick={handleSaveDraftAndExit}
                     disabled={saving}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-60"
                   >
-                    <UploadCloud className="size-4" />
-                    {saving && busyAction === "publish" ? "Publishing…" : "Publish"}
+                    <Save className="size-4" />
+                    Simpan sebagai Draft
                   </button>
-                )}
+
+                  {canSubmitReview && (
+                    <button
+                      type="button"
+                      onClick={handleSubmitReview}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
+                    >
+                      <Send className="size-4" />
+                      {saving && busyAction === "submit" ? "Submitting…" : "Submit Review"}
+                    </button>
+                  )}
+
+                  {canPublishNow && (
+                    <button
+                      type="button"
+                      onClick={handlePublish}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-60"
+                    >
+                      <UploadCloud className="size-4" />
+                      {saving && busyAction === "publish" ? "Publishing…" : "Publish"}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </>
-        )}
+          )}
+        </Panel>
+
+        {/* WHAT THIS STEP COVERS */}
+        <Panel title="What this step covers">
+          <ul className="space-y-2">
+            {meta.covers.map((c) => (
+              <li key={c} className="flex items-center gap-2 text-sm text-slate-700">
+                <CheckCircle2 className="size-4 shrink-0 text-teal-500" />
+                {c}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        {/* STATUS CARDS */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <InfoCard label="Status" value="Draft" />
+          <InfoCard
+            label="Tersimpan"
+            value={articleId ? `#${articleId} tersimpan` : "Belum"}
+          />
+          <InfoCard
+            label="Finish"
+            value={articleId ? "Siap submit" : "Locked"}
+          />
+        </div>
       </div>
     </>
   );
