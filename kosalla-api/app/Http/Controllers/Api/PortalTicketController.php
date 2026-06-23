@@ -199,7 +199,26 @@ class PortalTicketController extends Controller
             ], 403);
         }
 
-        $ticket = DB::transaction(function () use ($user, $payload) {
+        // Handler (Team Lead) — guard di application layer (pengganti rule `exists`).
+        // Jika assigned_to dikirim, pastikan user tsb benar Team Lead aktif dari
+        // team PIC produk yang dipilih, DAN org reporter ter-attach ke team itu.
+        // Mencegah manipulasi payload.
+        $assignedTo = $payload['assigned_to'] ?? null;
+        if ($assignedTo !== null) {
+            $inventoryItemId = (int) ($payload['inventory_item_id'] ?? 0);
+            $isValidHandler = $inventoryItemId > 0
+                && app(\App\Services\ProductHandlerService::class)
+                    ->isValidHandlerForProduct((int) $assignedTo, $inventoryItemId, (int) $user->organization_id);
+
+            if (!$isValidHandler) {
+                return response()->json([
+                    'message' => 'Handler tidak valid. Handler harus Team Lead dari team PIC produk yang dipilih.',
+                    'errors' => ['assigned_to' => ['Handler tidak valid.']],
+                ], 422);
+            }
+        }
+
+        $ticket = DB::transaction(function () use ($user, $payload, $assignedTo) {
             // ticket_number unik per organisasi: TCK-{ORGID}-{YYYYMMDD}-{NNNN}
             $date = now()->format('Ymd');
             $prefix = "TCK-{$user->organization_id}-{$date}-";
@@ -225,6 +244,9 @@ class PortalTicketController extends Controller
                 'location_id' => $user->location_id,
                 'created_by' => $user->id,
                 'ticket_number' => $ticketNumber,
+
+                // Handler terpilih (Team Lead) — null jika tidak dipilih.
+                'assigned_to' => $assignedTo,
 
                 'subject' => $payload['subject'],
                 'category' => $payload['category'] ?? null,
@@ -291,6 +313,7 @@ class PortalTicketController extends Controller
                 'location:id,name,organization_id,branch_id',
                 'location.branch:id,name',
                 'creator:id,name,email',
+                'assignee:id,name,email',
                 'inventoryItem:id,name',
                 'organization:id,name',
             ])->loadCount([
@@ -338,6 +361,7 @@ class PortalTicketController extends Controller
             'location:id,name,organization_id,branch_id',
             'location.branch:id,name',
             'creator:id,name,email',
+            'assignee:id,name,email',
             'inventoryItem:id,name',
             'organization:id,name',
             'attachments' => function ($q) {
@@ -376,7 +400,36 @@ class PortalTicketController extends Controller
         $data = $ticket->toArray();
         $data['attachments'] = $attachments;
 
+        // Flag untuk FE: apakah user login berwenang melempar tiket ini.
+        $data['can_transfer'] = app(\App\Services\TicketTransferService::class)
+            ->canTransfer($user, $ticket);
+
         return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Cek apakah $userId adalah Team Lead aktif di salah satu team yang
+     * ter-attach ke $organizationId. Dipakai sebagai guard server-side
+     * untuk assigned_to (Handler) — pengganti rule `exists`/FK.
+     */
+    private function isValidHandler(int $userId, int $organizationId): bool
+    {
+        $teamIds = DB::table('organization_team_groups')
+            ->join('team_groups', 'team_groups.id', '=', 'organization_team_groups.team_group_id')
+            ->where('organization_team_groups.organization_id', $organizationId)
+            ->where('team_groups.is_active', true)
+            ->pluck('team_groups.id');
+
+        if ($teamIds->isEmpty()) {
+            return false;
+        }
+
+        return DB::table('team_group_user')
+            ->whereIn('team_group_id', $teamIds)
+            ->where('user_id', $userId)
+            ->where('role', 'team-lead')
+            ->where('is_active', true)
+            ->exists();
     }
 
     /**

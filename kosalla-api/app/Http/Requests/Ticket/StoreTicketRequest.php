@@ -26,6 +26,11 @@ class StoreTicketRequest extends FormRequest
 
             'priority' => ['nullable', 'in:low,normal,high'],
 
+            // Handler (Team Lead) — reuse kolom tickets.assigned_to.
+            // Sengaja TANPA rule `exists:` (no FK / no query-validate); integritas
+            // dijaga di application layer pada PortalTicketController::store.
+            'assigned_to' => ['nullable', 'integer'],
+
             // optional
             'action_number' => ['nullable', 'string', 'max:80'],
             'requested_resolution_date' => ['nullable', 'date'],

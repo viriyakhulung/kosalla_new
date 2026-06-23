@@ -23,6 +23,9 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\MasterRoleController;
 use App\Http\Controllers\Api\MasterProductController;
 use App\Http\Controllers\Api\PortalTicketController;
+use App\Http\Controllers\Api\PortalTeamLeadController;
+use App\Http\Controllers\Api\PortalTicketTransferController;
+use App\Http\Controllers\Api\PortalProductTeamLeadController;
 use App\Http\Controllers\Api\TicketAttachmentController;
 use App\Http\Controllers\Api\TicketCloseController;
 use App\Http\Controllers\Api\PortalKbController;
@@ -89,8 +92,18 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('tickets', [PortalTicketController::class, 'store'])->middleware('active_contract');
             Route::get('tickets/{ticket}', [PortalTicketController::class, 'show']);
 
+            // Transfer/lempar tiket ke team group lain (otorisasi team-lead dicek di controller)
+            Route::get('transfer-targets/{ticket}', [PortalTicketTransferController::class, 'targets']);
+            Route::patch('tickets/{ticket}/transfer', [PortalTicketTransferController::class, 'transfer']);
+
             // Inventory items (Portal)
             Route::get('inventory-items', [\App\Http\Controllers\Api\PortalInventoryItemController::class, 'index']);
+
+            // Team Leads untuk pilihan Handler saat create ticket (scoped ke org user)
+            Route::get('team-leads', [PortalTeamLeadController::class, 'index']);
+
+            // Handler (Team Lead) berdasarkan produk terpilih (team PIC master product)
+            Route::get('product-team-lead', [PortalProductTeamLeadController::class, 'show']);
 
             // KB Reader
             Route::prefix('kb')->group(function () {

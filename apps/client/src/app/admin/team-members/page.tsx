@@ -99,7 +99,13 @@ async function fetchTeamGroups(): Promise<TeamGroup[]> {
 
 async function fetchUsers(): Promise<UserLite[]> {
   const json = await apiFetch("/api/admin/users/all");
-  return pickArray(json) as UserLite[];
+  const all = pickArray(json) as UserLite[];
+  // Hanya staf internal vendor (superadmin=1 / viriyastaff=2) yang boleh jadi
+  // anggota team — selaras dengan guard backend & keamanan multi-tenant.
+  return all.filter((u) => {
+    const r = Number(u.master_role_id);
+    return r === 1 || r === 2;
+  });
 }
 
 async function fetchMembers(teamGroupId: number): Promise<Member[]> {

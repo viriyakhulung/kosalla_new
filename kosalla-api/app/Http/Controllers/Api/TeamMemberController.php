@@ -47,6 +47,17 @@ class TeamMemberController extends Controller
         $userId = (int) $validated['user_id'];
         $role   = $validated['role'] ?? 'engineer-staff';
 
+        // Guard keamanan (app-layer): hanya staf internal vendor (superadmin/
+        // viriyastaff = master_role 1/2) yang boleh jadi anggota team. Mencegah
+        // custstaff masuk team → menutup jalur kebocoran notifikasi lintas-tenant.
+        $candidate = User::select('id', 'master_role_id')->find($userId);
+        if (!$candidate || !in_array((int) $candidate->master_role_id, [1, 2], true)) {
+            return response()->json([
+                'message' => 'Hanya staf internal (superadmin/viriyastaff) yang boleh menjadi anggota team.',
+                'errors'  => ['user_id' => ['User bukan staf internal.']],
+            ], 422);
+        }
+
         $teamGroup->users()->syncWithoutDetaching([
             $userId => ['role' => $role, 'is_active' => true],
         ]);

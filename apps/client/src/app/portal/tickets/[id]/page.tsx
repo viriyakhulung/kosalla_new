@@ -14,10 +14,19 @@ import {
   Send,
   Download,
   XCircle,
+  Share2,
+  Loader2,
 } from "lucide-react";
 import { apiFetch, apiUpload, downloadWithAuth } from "@/lib/api";
 import AttachmentPicker from "@/components/portal/AttachmentPicker";
 import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -58,8 +67,17 @@ type Ticket = {
   reporter_name?: string | null;
   user?: { id: number; name?: string | null } | null;
   creator?: { id: number; name?: string | null } | null;
+  assignee?: { id: number; name?: string | null; email?: string | null } | null;
   attachments?: Attachment[];
   attachments_count?: number;
+  team_group_id?: number | null;
+  can_transfer?: boolean;
+};
+
+type TransferTarget = {
+  id: number;
+  name: string;
+  has_lead: boolean;
 };
 
 type MeUser = {
@@ -313,6 +331,15 @@ export default function TicketDetailPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState("");
 
+  // Transfer / lempar tiket ke team lain
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
+  const [loadingTargets, setLoadingTargets] = useState(false);
+  const [transferTeamId, setTransferTeamId] = useState<number | "">("");
+  const [transferNote, setTransferNote] = useState("");
+  const [transferring, setTransferring] = useState(false);
+  const [transferError, setTransferError] = useState("");
+
   const closed = useMemo(() => {
     const s = String(ticket?.status ?? "").trim().toLowerCase();
     return s === "closed" || s === "close";
@@ -387,6 +414,7 @@ export default function TicketDetailPage() {
       { label: "Category", value: ticket.category ?? "-" },
       { label: "Inventory", value: ticket.inventory_item?.name ?? ticket.inventory_item_name ?? "-" },
       { label: "Reporter", value: ticket.reporter_name ?? ticket.user?.name ?? ticket.creator?.name ?? "-" },
+      { label: "Handler", value: ticket.assignee?.name ?? "-" },
       { label: "Organization", value: ticket.organization?.name ?? "-" },
       { label: "Tagging Word", value: ticket.tagging_word || "-" },
       { label: "Requested Date", value: fmtDateShort(ticket.requested_resolution_date ?? undefined) },
@@ -467,6 +495,55 @@ export default function TicketDetailPage() {
     }
   }
 
+  async function openTransfer() {
+    if (!ticketId) return;
+    setTransferError("");
+    setTransferTeamId("");
+    setTransferNote("");
+    setTransferOpen(true);
+    setLoadingTargets(true);
+    try {
+      const res = await apiFetch<{ data: TransferTarget[] }>(`/portal/transfer-targets/${ticketId}`);
+      setTransferTargets(res?.data ?? []);
+    } catch (e: any) {
+      setTransferTargets([]);
+      setTransferError(e?.message ?? "Gagal memuat daftar team tujuan.");
+    } finally {
+      setLoadingTargets(false);
+    }
+  }
+
+  async function submitTransfer() {
+    if (!ticketId || transferring) return;
+    setTransferError("");
+
+    if (!transferTeamId) {
+      setTransferError("Team tujuan wajib dipilih.");
+      return;
+    }
+    if (!transferNote.trim()) {
+      setTransferError("Catatan/alasan wajib diisi.");
+      return;
+    }
+
+    setTransferring(true);
+    try {
+      await apiFetch(`/portal/tickets/${ticketId}/transfer`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          to_team_group_id: transferTeamId,
+          note: transferNote.trim(),
+        }),
+      });
+      setTransferOpen(false);
+      await Promise.all([loadTicket(), loadComments()]);
+    } catch (e: any) {
+      setTransferError(e?.message ?? "Gagal transfer ticket.");
+    } finally {
+      setTransferring(false);
+    }
+  }
+
   /* ─── Render ─────────────────────────────────────────────────────────── */
 
   return (
@@ -511,6 +588,18 @@ export default function TicketDetailPage() {
               <RotateCcw className="size-4" />
               Refresh
             </button>
+
+            {!loading && ticket?.can_transfer && !closed && (
+              <button
+                type="button"
+                onClick={openTransfer}
+                disabled={busy || transferring}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm transition-colors hover:bg-indigo-100 disabled:opacity-60"
+              >
+                <Share2 className="size-4" />
+                Lempar ke Team Lain
+              </button>
+            )}
 
             <button
               type="button"
@@ -830,6 +919,98 @@ export default function TicketDetailPage() {
           </>
         )}
       </div>
+
+      {/* Dialog transfer / lempar tiket */}
+      <Dialog open={transferOpen} onOpenChange={(o) => !transferring && setTransferOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Lempar Tiket ke Team Lain</DialogTitle>
+            <DialogDescription>
+              Tiket akan ditugaskan ke Team Lead dari team tujuan. Semua member team tujuan akan dapat email.
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingTargets ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-slate-400">
+              <Loader2 className="size-4 animate-spin" /> Memuat daftar team…
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  Team Tujuan <span className="text-red-500">*</span>
+                </label>
+                {transferTargets.length === 0 ? (
+                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400">
+                    Tidak ada team tujuan yang tersedia.
+                  </p>
+                ) : (
+                  <select
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    value={transferTeamId}
+                    onChange={(e) => setTransferTeamId(e.target.value ? Number(e.target.value) : "")}
+                  >
+                    <option value="">— Pilih Team —</option>
+                    {transferTargets.map((t) => (
+                      <option key={t.id} value={t.id} disabled={!t.has_lead}>
+                        {t.name}
+                        {t.has_lead ? "" : " (tanpa Team Lead)"}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  Catatan / Alasan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  className="min-h-[90px] w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  placeholder="Jelaskan alasan tiket dilempar ke team ini…"
+                  maxLength={1000}
+                />
+              </div>
+
+              {transferError && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <XCircle className="mt-0.5 size-4 shrink-0" />
+                  <span>{transferError}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setTransferOpen(false)}
+                  disabled={transferring}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-60"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={submitTransfer}
+                  disabled={transferring || !transferTeamId || !transferNote.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  {transferring ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" /> Memproses…
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="size-4" /> Lempar Tiket
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

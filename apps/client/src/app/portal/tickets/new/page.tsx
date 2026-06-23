@@ -33,6 +33,13 @@ type InventoryItem = {
   name: string;
 };
 
+type TeamLead = {
+  id: number;
+  name: string;
+  email: string;
+  team_group_name?: string | null;
+};
+
 /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
 function initials(name?: string | null): string {
@@ -181,6 +188,11 @@ export default function CreateTicketPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
+  // Handler (Team Lead) — diturunkan dari produk terpilih (team PIC master product)
+  const [handlerLoading, setHandlerLoading] = useState(false);
+  const [resolvedHandler, setResolvedHandler] = useState<TeamLead | null>(null);
+  const [handlerTeamName, setHandlerTeamName] = useState<string>("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -241,6 +253,43 @@ export default function CreateTicketPage() {
     loadProducts();
   }, []);
 
+  // Handler REAKTIF ke Produk: resolve Team Lead dari team PIC produk terpilih.
+  // Reset tiap Produk berubah. Produk kosong → tidak fetch.
+  useEffect(() => {
+    setResolvedHandler(null);
+    setHandlerTeamName("");
+
+    if (!inventoryItemId) {
+      setHandlerLoading(false);
+      return;
+    }
+
+    let alive = true;
+    async function resolveHandler() {
+      try {
+        setHandlerLoading(true);
+        const res = await apiFetch<{
+          data: { team_group_id: number; team_group_name: string; lead: TeamLead | null } | null;
+        }>(`/portal/product-team-lead?inventory_item_id=${inventoryItemId}`);
+        if (!alive) return;
+        const data = res?.data ?? null;
+        setHandlerTeamName(data?.team_group_name ?? "");
+        setResolvedHandler(data?.lead ?? null);
+      } catch (e: any) {
+        if (!alive) return;
+        console.error("Gagal resolve handler", e?.message);
+        setResolvedHandler(null);
+        setHandlerTeamName("");
+      } finally {
+        if (alive) setHandlerLoading(false);
+      }
+    }
+    resolveHandler();
+    return () => {
+      alive = false;
+    };
+  }, [inventoryItemId]);
+
   // ✅ Lock scroll saat submitting (biar halaman benar-benar "terkunci")
   useEffect(() => {
     if (!submitting) return;
@@ -288,6 +337,7 @@ export default function CreateTicketPage() {
       fd.append("error_code", errorCode);
       fd.append("project", project);
       fd.append("severity", severity);
+      if (resolvedHandler) fd.append("assigned_to", String(resolvedHandler.id));
       fd.append("description_html", descriptionHtml);
 
       files.forEach((f) => fd.append("attachments[]", f));
@@ -527,6 +577,41 @@ export default function CreateTicketPage() {
                     </span>
                     <span className="text-xs text-slate-400">· otomatis</span>
                   </div>
+                </Field>
+
+                {/* Handler (Team Lead) — otomatis dari team PIC produk terpilih */}
+                <Field label="Handler">
+                  {!inventoryItemId ? (
+                    <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400">
+                      Pilih produk dulu
+                    </div>
+                  ) : handlerLoading ? (
+                    <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400">
+                      <Loader2 className="size-4 animate-spin" /> Menentukan Handler…
+                    </div>
+                  ) : resolvedHandler ? (
+                    <div className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3">
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
+                        {initials(resolvedHandler.name)}
+                      </span>
+                      <span className="truncate text-sm font-medium text-slate-800">
+                        {resolvedHandler.name}
+                      </span>
+                      {handlerTeamName && (
+                        <span className="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-600">
+                          {handlerTeamName}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400">· otomatis</span>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400"
+                      title="Produk ini belum punya Team Lead PIC untuk organisasi Anda"
+                    >
+                      Belum ada Team Lead untuk produk ini
+                    </div>
+                  )}
                 </Field>
 
                 <Field label="Project">

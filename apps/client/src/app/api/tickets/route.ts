@@ -60,6 +60,10 @@ export async function POST(req: Request) {
   const inventoryItemId = form.get("inventory_item_id");
   if (inventoryItemId) fd.set("inventory_item_id", String(inventoryItemId));
 
+  // Handler (Team Lead) — reuse assigned_to. Hanya forward jika ada nilainya.
+  const assignedTo = String(form.get("assigned_to") ?? "");
+  if (assignedTo) fd.set("assigned_to", assignedTo);
+
   // expected date (PS)
   const expectedDate = String(form.get("expected_date") ?? "");
   if (expectedDate) fd.set("expected_date", expectedDate);

@@ -82,6 +82,7 @@ export async function updateMasterProduct(id: number, payload: Partial<{
   name: string;
   product_type: string;
   is_active: boolean;
+  team_group_id: number | null;
 }>) {
   return apiFetch(`/api/admin/master-products/${id}`, {
     method: "PUT",

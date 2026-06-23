@@ -8,9 +8,17 @@ import {
   updateMasterProduct,
   deleteMasterProduct,
 } from "@/lib/inventory-items";
+import { getTeamGroups, type TeamGroup } from "@/lib/organization-teams";
 import { PageHead, SectionCard, Field, adminInput, adminPrimaryBtn, adminGhostBtn, RowIcon } from "@/components/admin/ui";
 
-type MasterProduct = { id: number; name: string; product_type: string; is_active: boolean };
+type MasterProduct = {
+  id: number;
+  name: string;
+  product_type: string;
+  is_active: boolean;
+  team_group_id?: number | null;
+  team_group?: { id: number; name: string } | null;
+};
 
 export default function MasterProductsPage() {
   const [masters, setMasters] = useState<MasterProduct[]>([]);
@@ -19,6 +27,10 @@ export default function MasterProductsPage() {
   const [error, setError] = useState("");
 
   const [name, setName] = useState("");
+
+  // Team PIC (mapping produk → team)
+  const [teams, setTeams] = useState<TeamGroup[]>([]);
+  const [savingTeamId, setSavingTeamId] = useState<number | null>(null);
 
   async function load() {
     setError("");
@@ -33,8 +45,33 @@ export default function MasterProductsPage() {
     }
   }
 
+  async function loadTeams() {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("kosalla_token") : null;
+      const list = await getTeamGroups(token);
+      setTeams(list.filter((t) => t.is_active));
+    } catch (e: any) {
+      console.error("Gagal memuat team", e?.message);
+    }
+  }
+
+  async function onChangeTeamPic(mp: MasterProduct, value: string) {
+    const teamGroupId = value ? Number(value) : null;
+    setSavingTeamId(mp.id);
+    setError("");
+    try {
+      await updateMasterProduct(mp.id, { team_group_id: teamGroupId });
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Gagal set Team PIC");
+    } finally {
+      setSavingTeamId(null);
+    }
+  }
+
   useEffect(() => {
     load();
+    loadTeams();
   }, []);
 
   async function onCreate() {
@@ -134,6 +171,22 @@ export default function MasterProductsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-slate-400">Team PIC:</span>
+                    <select
+                      className={`${adminInput} h-9 w-44`}
+                      value={mp.team_group_id ?? ""}
+                      disabled={savingTeamId === mp.id}
+                      onChange={(e) => onChangeTeamPic(mp, e.target.value)}
+                    >
+                      <option value="">— belum diset —</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <button className={adminGhostBtn} onClick={() => onToggle(mp)}>
                     {mp.is_active ? "Disable" : "Enable"}
                   </button>
