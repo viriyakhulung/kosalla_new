@@ -14,7 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import RichTextEditor from "@/components/portal/RichTextEditor";
 import { useClientSession } from "@/hooks/useClientSession";
 import { cn } from "@/lib/utils";
 import { Stepper, type Step, type StepState } from "@/components/ui/Stepper";
@@ -392,7 +392,7 @@ export default function TutorialWizard() {
           {stepIndex === 1 && (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-2">
-                <RichTextEditorClient value={bodyHtml} onChange={setBodyHtml} />
+                <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">

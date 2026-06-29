@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, FileText, CalendarDays, Loader2, BookOpen } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { ArrowLeft, FileText, CalendarDays, Loader2, BookOpen, Download } from "lucide-react";
+import { apiFetch, API_BASE, downloadWithAuth } from "@/lib/api";
 
 type Product = { id: number; name: string };
 
@@ -65,6 +65,25 @@ export default function TutorialDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<KBDetail | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportPdf() {
+    const articleSlug = data?.slug ?? slug;
+    if (!articleSlug) return;
+    setExporting(true);
+    setError("");
+    try {
+      // Teruskan org_id bila ada (dibutuhkan superadmin/viriyastaff), ikut pola existing.
+      const orgId = sp.get("org_id");
+      const qs = orgId ? `?org_id=${encodeURIComponent(orgId)}` : "";
+      const url = `${API_BASE}/portal/kb/articles/${articleSlug}/export-pdf${qs}`;
+      await downloadWithAuth(url, `knowledge-base-${articleSlug}.pdf`);
+    } catch (e: any) {
+      setError(e?.message ?? "Gagal export PDF");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -96,15 +115,38 @@ export default function TutorialDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      {/* Back */}
-      <button
-        type="button"
-        onClick={() => router.push(backTarget)}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-teal-600"
-      >
-        <ArrowLeft className="size-4" />
-        Kembali ke Knowledge Base
-      </button>
+      {/* Back + actions */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => router.push(backTarget)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-teal-600"
+        >
+          <ArrowLeft className="size-4" />
+          Kembali ke Knowledge Base
+        </button>
+
+        {data && !loading && (
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={exporting}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Exporting…
+              </>
+            ) : (
+              <>
+                <Download className="size-3.5" />
+                Export PDF
+              </>
+            )}
+          </button>
+        )}
+      </div>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

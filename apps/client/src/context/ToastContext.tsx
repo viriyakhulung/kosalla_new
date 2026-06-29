@@ -1,4 +1,4 @@
-import { createContext, useCallback, useState } from "react";
+import { createContext, useCallback, useMemo, useState } from "react";
 import type { Toast, ToastType } from "@/types";
 
 type ToastContextType = {
@@ -18,9 +18,13 @@ interface ToastProviderProps {
 export function ToastProvider({ children }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
   const showToast = useCallback(
     (message: string, type: ToastType = "info", duration = 5000) => {
-      const id = Math.random().toString(36).substr(2, 9);
+      const id = Math.random().toString(36).slice(2, 11);
 
       const newToast: Toast = {
         id,
@@ -36,15 +40,16 @@ export function ToastProvider({ children }: ToastProviderProps) {
         removeToast(id);
       }, duration);
     },
-    []
+    [removeToast]
   );
 
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
+  const value = useMemo(
+    () => ({ toasts, showToast, removeToast }),
+    [toasts, showToast, removeToast]
+  );
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
+    <ToastContext.Provider value={value}>
       {children}
     </ToastContext.Provider>
   );

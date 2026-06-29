@@ -152,18 +152,35 @@ class TicketController extends Controller
     }
 
     /**
-     * Query tiket terfilter untuk export (TANPA paginate — export harus lengkap).
-     * Filter: organisasi (binding) + created_at between from/to + status.
+     * Safety cap baris export — export berjalan sinkron, jadi batasi agar tidak
+     * memuat seluruh tabel ke memori (cegah timeout/memory spike). Berlaku SELALU.
      */
-    private function ticketsForExport(Organization $organization, ?string $from, ?string $to, ?string $status)
+    private const EXPORT_ROW_CAP = 10000;
+
+    /**
+     * Builder tiket terfilter untuk export: organisasi (binding) + created_at
+     * between from/to (opsional) + status (opsional). Tanpa filter tanggal =
+     * SEMUA tiket. Dipakai untuk hitung total maupun ambil data (dengan cap).
+     */
+    private function exportQuery(Organization $organization, ?string $from, ?string $to, ?string $status)
     {
         return Ticket::query()
             ->where('organization_id', $organization->id)
-            ->with(['creator:id,name', 'closedBy:id,name', 'location.branch'])
             ->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))
-            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($status, fn ($q) => $q->where('status', $status));
+    }
+
+    /**
+     * Tiket terfilter untuk export (TANPA paginate). Dibatasi EXPORT_ROW_CAP baris
+     * sebagai pelindung karena export sinkron.
+     */
+    private function ticketsForExport(Organization $organization, ?string $from, ?string $to, ?string $status)
+    {
+        return $this->exportQuery($organization, $from, $to, $status)
+            ->with(['creator:id,name', 'closedBy:id,name', 'location.branch'])
             ->orderBy('created_at')
+            ->limit(self::EXPORT_ROW_CAP)
             ->get();
     }
 
@@ -173,17 +190,22 @@ class TicketController extends Controller
      */
     public function exportReport(Request $request, Organization $organization, TicketSlaService $sla)
     {
-        $request->validate([
+        $validated = $request->validate([
             'from'   => ['nullable', 'date'],
             'to'     => ['nullable', 'date', 'after_or_equal:from'],
             'status' => ['nullable', 'in:open,in_progress,resolved,closed'],
         ]);
 
-        $from   = $request->query('from');
-        $to     = $request->query('to');
-        $status = $request->query('status');
+        $from   = $validated['from'] ?? null;
+        $to     = $validated['to'] ?? null;
+        $status = $validated['status'] ?? null;
 
+        // Tanpa filter tanggal → export SEMUA tiket (tanpa batas tanggal).
+        // Filter tanggal user (bila ada) tetap dihormati. Safety cap EXPORT_ROW_CAP
+        // berlaku selalu; hitung total untuk tahu apakah hasil terpotong.
+        $total   = $this->exportQuery($organization, $from, $to, $status)->count();
         $tickets = $this->ticketsForExport($organization, $from, $to, $status);
+        $capped  = $total > self::EXPORT_ROW_CAP;
 
         // Ringkasan & SLA per-tiket dari sumber yang sama dgn dashboard (Fase 1).
         // Catatan: ringkasan dihitung atas SELURUH tiket terfilter (bukan 1 halaman),
@@ -199,7 +221,7 @@ class TicketController extends Controller
         );
 
         return Excel::download(
-            new TicketReportExport($organization, $tickets, $summary, $perTicket, $from, $to, $status),
+            new TicketReportExport($organization, $tickets, $summary, $perTicket, $from, $to, $status, $capped),
             $filename
         );
     }

@@ -8,9 +8,14 @@ use App\Http\Requests\InventoryItem\UpdateInventoryItemRequest;
 use App\Models\InventoryItem;
 use App\Models\Organization;
 use App\Models\MasterProduct;
+use App\Services\OwnedMasterProductService;
 
 class InventoryItemController extends Controller
 {
+    public function __construct(private OwnedMasterProductService $ownedProducts)
+    {
+    }
+
     public function index(Organization $organization)
     {
         return $organization->inventoryItems()
@@ -37,6 +42,9 @@ class InventoryItemController extends Controller
             'product_type' => $master->product_type,
             'is_active' => $request->boolean('is_active', true),
         ]);
+
+        // Kepemilikan produk org berubah → segarkan cache owned_mpids org ini.
+        $this->ownedProducts->forget((int) $organization->id);
 
         return response()->json($item, 201);
     }
@@ -67,6 +75,12 @@ class InventoryItemController extends Controller
         }
 
         $inventoryItem->update($data);
+
+        // Kepemilikan produk org bisa berubah (master_product_id / is_active) →
+        // segarkan cache owned_mpids. organization_id item immutable (tak ada di
+        // UpdateInventoryItemRequest) → cukup satu org.
+        $this->ownedProducts->forget((int) $inventoryItem->organization_id);
+
         return $inventoryItem->fresh()->load('organization');
     }
 
@@ -80,7 +94,12 @@ class InventoryItemController extends Controller
             ], 422);
         }
 
+        $orgId = (int) $inventoryItem->organization_id;
         $inventoryItem->delete();
+
+        // Kepemilikan produk org berubah → segarkan cache owned_mpids org ini.
+        $this->ownedProducts->forget($orgId);
+
         return response()->json(['message' => 'Inventory item deleted']);
     }
 }

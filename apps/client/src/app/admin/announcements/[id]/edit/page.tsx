@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import RichTextEditor from "@/components/portal/RichTextEditor";
 
 type Product = { id: number; name: string };
 type AdminProductsResponse = Product[] | { data?: Product[] };
@@ -194,7 +194,7 @@ export default function AdminEditAnnouncementPage() {
               <div>
                 <label className="text-sm font-medium text-slate-700">Body (HTML)</label>
                 <div className="mt-1 rounded-lg border border-slate-300 bg-white p-2">
-                  <RichTextEditorClient value={bodyHtml} onChange={setBodyHtml} />
+                  <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
                 </div>
               </div>
 

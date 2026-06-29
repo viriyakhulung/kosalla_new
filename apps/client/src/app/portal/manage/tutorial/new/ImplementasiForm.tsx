@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Send, UploadCloud, Loader2, Ban, Package, Type, FileText } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import RichTextEditor from "@/components/portal/RichTextEditor";
 import { useClientSession } from "@/hooks/useClientSession";
 import { cn } from "@/lib/utils";
 
@@ -306,7 +306,7 @@ export default function ImplementasiForm() {
         {/* Content */}
         <SectionCard icon={<FileText className="size-4" />} title="Content (HTML)">
           <div className="rounded-xl border border-slate-200 bg-white p-2">
-            <RichTextEditorClient value={bodyHtml} onChange={setBodyHtml} />
+            <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
           </div>
         </SectionCard>
 

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { apiFetch, apiUpload, downloadWithAuth } from "@/lib/api";
 import AttachmentPicker from "@/components/portal/AttachmentPicker";
-import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import RichTextEditor from "@/components/portal/RichTextEditor";
 import {
   Dialog,
   DialogContent,
@@ -760,7 +760,7 @@ export default function TicketDetailPage() {
                       !canSend && "pointer-events-none opacity-60"
                     )}
                   >
-                    <RichTextEditorClient value={chatBody} onChange={setChatBody} />
+                    <RichTextEditor value={chatBody} onChange={setChatBody} />
                   </div>
 
                   <div className="flex flex-wrap items-start justify-between gap-3">

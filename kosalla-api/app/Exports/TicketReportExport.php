@@ -26,12 +26,13 @@ class TicketReportExport implements WithMultipleSheets
         private ?string $from,
         private ?string $to,
         private ?string $status,
+        private bool $capped = false,   // true bila hasil terpotong di safety cap baris
     ) {}
 
     public function sheets(): array
     {
         return [
-            new RingkasanSheet($this->organization, $this->summary, $this->from, $this->to, $this->status),
+            new RingkasanSheet($this->organization, $this->summary, $this->from, $this->to, $this->status, $this->capped),
             new DataTiketSheet($this->tickets, $this->perTicketSla),
         ];
     }

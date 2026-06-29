@@ -15,7 +15,7 @@ import {
   Ban,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import RichTextEditorClient from "@/components/portal/RichTextEditorClient";
+import RichTextEditor from "@/components/portal/RichTextEditor";
 import { useClientSession } from "@/hooks/useClientSession";
 import { cn } from "@/lib/utils";
 
@@ -620,7 +620,7 @@ export default function UserArticleDetailPage() {
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">Content (HTML)</label>
               {editMode ? (
                 <div className="rounded-xl border border-slate-200 bg-white p-2">
-                  <RichTextEditorClient value={bodyHtml} onChange={setBodyHtml} />
+                  <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

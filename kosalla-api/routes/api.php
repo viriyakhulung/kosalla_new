@@ -108,6 +108,7 @@ Route::middleware('auth:sanctum')->group(function () {
             // KB Reader
             Route::prefix('kb')->group(function () {
                 Route::get('articles', [PortalKbController::class, 'index']);
+                Route::get('articles/{slug}/export-pdf', [PortalKbController::class, 'exportPdf']);
                 Route::get('articles/{slug}', [PortalKbController::class, 'show']);
             });
 

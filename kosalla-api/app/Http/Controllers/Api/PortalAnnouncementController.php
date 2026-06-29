@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
+use App\Services\OwnedMasterProductService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class PortalAnnouncementController extends Controller
 {
+    public function __construct(private OwnedMasterProductService $ownedProducts)
+    {
+    }
+
     private function resolveOrgId(Request $request): int
     {
         $user = $request->user();
@@ -34,18 +39,7 @@ class PortalAnnouncementController extends Controller
      */
     private function ownedMasterProductIds(int $orgId): array
     {
-        return DB::table('master_products as mp')
-            ->join('inventory_items as ii', function ($join) {
-                // ✅ lebih aman: ini benar-benar ON clause join
-                $join->onRaw("LOWER(TRIM(ii.name)) = LOWER(TRIM(mp.name))");
-            })
-            ->where('ii.organization_id', $orgId)
-            ->where('ii.is_active', true)
-            ->distinct()
-            ->pluck('mp.id')
-            ->map(fn ($v) => (int) $v)
-            ->values()
-            ->all();
+        return $this->ownedProducts->ownedMasterProductIds($orgId);
     }
 
     private function activeContract(int $orgId)

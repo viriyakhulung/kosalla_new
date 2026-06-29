@@ -26,6 +26,7 @@ class RingkasanSheet implements FromArray, WithTitle, WithEvents, WithColumnWidt
         private ?string $from,
         private ?string $to,
         private ?string $status,
+        private bool $capped = false,   // true bila data tiket terpotong di safety cap
     ) {}
 
     public function title(): string
@@ -35,9 +36,14 @@ class RingkasanSheet implements FromArray, WithTitle, WithEvents, WithColumnWidt
 
     public function array(): array
     {
-        return [
+        // Periode: tanpa filter tanggal → "semua (tanpa batas tanggal)".
+        $periodeRow = ($this->from === null && $this->to === null)
+            ? ['Periode (dibuat)', 'semua (tanpa batas tanggal)']
+            : ['Periode (dibuat)', $this->from ?? 'awal', 's/d', $this->to ?? 'sekarang'];
+
+        $rows = [
             ['Report Tiket — ' . $this->organization->name],            // 1
-            ['Periode (dibuat)', $this->from ?? 'awal', 's/d', $this->to ?? 'sekarang'], // 2
+            $periodeRow,                                                // 2
             ['Filter status', $this->status ?? 'semua'],                // 3
             ['Digenerate pada', now()->format('d/m/Y H.i')],            // 4
             [],                                                         // 5
@@ -50,6 +56,15 @@ class RingkasanSheet implements FromArray, WithTitle, WithEvents, WithColumnWidt
             ['Rata-rata penyelesaian', $this->fmtHours($this->summary['avg_ms'] ?? null)], // 12
             ['Target SLA (jam)', $this->summary['target_hours'] ?? null], // 13
         ];
+
+        // Catatan cap — hanya bila data benar-benar terpotong. Ditaruh di akhir
+        // (baris 14+) agar tidak menggeser baris 1–13 yang di-style di AfterSheet.
+        if ($this->capped) {
+            $rows[] = [];
+            $rows[] = ['Catatan: dibatasi 10.000 baris pertama — gunakan filter tanggal untuk rentang spesifik.'];
+        }
+
+        return $rows;
     }
 
     public function columnWidths(): array

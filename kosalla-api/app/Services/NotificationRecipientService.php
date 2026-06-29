@@ -49,12 +49,17 @@ class NotificationRecipientService
             ->get();
 
         if ($teams && $teams->isNotEmpty()) {
-            $recipients = $teams->flatMap(function ($team) {
-                return $team->users()
-                    ->wherePivot('is_active', true)
-                    ->get();
+            $teamIds = $teams->pluck('id')->all();
+
+            // Satu query menggantikan flatMap per-tim (hindari N+1).
+            // Penerima = user yang merupakan anggota AKTIF (pivot is_active=true)
+            // dari minimal satu tim dalam set — setara hasil flatMap+unique lama.
+            $recipients = User::whereHas('teamGroups', function ($q) use ($teamIds) {
+                $q->whereIn('team_groups.id', $teamIds)
+                    ->where('team_group_user.is_active', true);
             })
-                // Filter keamanan multi-tenant (app-layer).
+                ->get()
+                // Filter keamanan multi-tenant (app-layer) — tidak diubah.
                 ->filter(fn ($u) => $u && $this->mayReceive($u, $orgId))
                 ->unique('id')
                 ->values();

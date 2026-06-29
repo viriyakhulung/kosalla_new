@@ -156,24 +156,24 @@ class PortalTicketController extends Controller
     // POST /api/portal/tickets
     public function store(StoreTicketRequest $request)
     {
-        // ✅ LOG: RAW input (sebelum validated)
-        \Log::info("TICKET_DESC_HTML_IN", [
-            "len_raw" => strlen((string) $request->input("description_html")),
-            "has_img_raw" => str_contains((string) $request->input("description_html"), "<img"),
-            "has_style_raw" => str_contains((string) $request->input("description_html"), "style="),
-            "head_raw" => substr((string) $request->input("description_html"), 0, 300),
-        ]);
-
         // ✅ sekali saja
         $payload = $request->validated();
 
-        // ✅ LOG: setelah validated()
-        \Log::info("TICKET_DESC_HTML_VALIDATED", [
-            "len_val" => strlen((string) ($payload["description_html"] ?? "")),
-            "has_img_val" => str_contains((string) ($payload["description_html"] ?? ""), "<img"),
-            "has_style_val" => str_contains((string) ($payload["description_html"] ?? ""), "style="),
-            "head_val" => substr((string) ($payload["description_html"] ?? ""), 0, 300),
-        ]);
+        // ✅ LOG (debug only): RAW input + setelah validated()
+        if (config('app.debug')) {
+            \Log::info("TICKET_DESC_HTML_IN", [
+                "len_raw" => strlen((string) $request->input("description_html")),
+                "has_img_raw" => str_contains((string) $request->input("description_html"), "<img"),
+                "has_style_raw" => str_contains((string) $request->input("description_html"), "style="),
+                "head_raw" => substr((string) $request->input("description_html"), 0, 300),
+            ]);
+            \Log::info("TICKET_DESC_HTML_VALIDATED", [
+                "len_val" => strlen((string) ($payload["description_html"] ?? "")),
+                "has_img_val" => str_contains((string) ($payload["description_html"] ?? ""), "<img"),
+                "has_style_val" => str_contains((string) ($payload["description_html"] ?? ""), "style="),
+                "head_val" => substr((string) ($payload["description_html"] ?? ""), 0, 300),
+            ]);
+        }
 
         $user = $request->user();
 
@@ -276,7 +276,11 @@ class PortalTicketController extends Controller
                 'schedule_comment' => $payload['schedule_comment'] ?? null,
             ]);
 
-            // ✅ LOG: hasil yang benar-benar tersimpan
+            return $ticket;
+        });
+
+        // ✅ LOG (debug only): hasil tersimpan — di LUAR transaksi agar tak memperpanjang lock.
+        if (config('app.debug')) {
             \Log::info("TICKET_DESC_HTML_SAVED", [
                 "ticket_id" => $ticket->id,
                 "len_saved" => strlen((string) ($ticket->description_html ?? "")),
@@ -284,9 +288,7 @@ class PortalTicketController extends Controller
                 "has_style_saved" => str_contains((string) ($ticket->description_html ?? ""), "style="),
                 "head_saved" => substr((string) ($ticket->description_html ?? ""), 0, 300),
             ]);
-
-            return $ticket;
-        });
+        }
 
         // EMAIL NOTIF: kirim ke member tim yang di-attach ke organisasi tiket,
         // plus creator. (organisation_attach_teams — tidak lagi pakai routing service.)
