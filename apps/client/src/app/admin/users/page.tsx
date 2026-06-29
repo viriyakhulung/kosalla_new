@@ -14,11 +14,22 @@ import {
   MapPin,
   Phone,
   Home,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { getOrganizations } from "@/lib/organizations";
 import { getLocations } from "@/lib/locations";
-import { createUser, deleteUser, getMasterRoles, getUsers } from "@/lib/users";
-import { PageHead, StatCard, SectionCard, Field, adminInput } from "@/components/admin/ui";
+import { createUser, deleteUser, getMasterRoles, getUsers, updateUser } from "@/lib/users";
+import { PageHead, StatCard, SectionCard, Field, adminInput, adminPrimaryBtn, adminGhostBtn } from "@/components/admin/ui";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 type Org = { id: number; name: string };
@@ -53,6 +64,16 @@ export default function AdminUsersPage() {
 
   // drawer detail user (read-only)
   const [detailUser, setDetailUser] = useState<any | null>(null);
+
+  // modal reset password (superadmin set password user lain)
+  const [resetUser, setResetUser] = useState<any | null>(null);
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetOk, setResetOk] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   // filter & search (eksekusi di backend)
   const [search, setSearch] = useState("");
@@ -232,6 +253,55 @@ export default function AdminUsersPage() {
       await refreshUsers({ search, role: roleFilter });
     } catch (e: any) {
       setError(e?.message ?? "Gagal delete user");
+    }
+  }
+
+  function openReset(u: any) {
+    setResetUser(u);
+    setNewPw("");
+    setConfirmPw("");
+    setResetError("");
+    setResetOk(false);
+    setShowNewPw(false);
+    setShowConfirmPw(false);
+  }
+
+  // Validasi password selaras policy backend (UpdateUserRequest): min 8,
+  // huruf besar+kecil, angka, simbol. Dicek di sini agar tidak hit API kalau lemah.
+  function validatePw(pw: string): string | null {
+    if (pw.length < 8) return "Password minimal 8 karakter.";
+    if (!/[a-z]/.test(pw)) return "Harus ada huruf kecil.";
+    if (!/[A-Z]/.test(pw)) return "Harus ada huruf besar.";
+    if (!/[0-9]/.test(pw)) return "Harus ada angka.";
+    if (!/[^A-Za-z0-9]/.test(pw)) return "Harus ada simbol.";
+    return null;
+  }
+
+  async function onResetSubmit() {
+    if (!resetUser) return;
+    setResetError("");
+
+    const pwErr = validatePw(newPw);
+    if (pwErr) {
+      setResetError(pwErr);
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setResetError("Konfirmasi password tidak cocok.");
+      return;
+    }
+
+    try {
+      setResetLoading(true);
+      await updateUser(resetUser.id, { password: newPw }); // endpoint existing
+      setResetOk(true);
+      setNewPw("");
+      setConfirmPw("");
+      setTimeout(() => setResetUser(null), 1200);
+    } catch (e: any) {
+      setResetError(e?.message ?? "Gagal reset password.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -450,16 +520,29 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(u.id);
-                    }}
-                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openReset(u);
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600"
+                      aria-label="Reset password"
+                      title="Reset password"
+                    >
+                      <KeyRound className="size-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(u.id);
+                      }}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -546,6 +629,82 @@ export default function AdminUsersPage() {
           )}
         </aside>
       </div>
+
+      {/* Modal Reset Password (superadmin set password user lain) */}
+      <Dialog open={!!resetUser} onOpenChange={(o) => { if (!o) setResetUser(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="size-5 text-teal-600" /> Reset Password
+            </DialogTitle>
+            <DialogDescription>
+              Set password baru untuk <b>{resetUser?.name}</b>. User akan login dengan password ini.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPw ? "text" : "password"}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  placeholder="Min 8 char, huruf besar/kecil, angka, simbol"
+                  className={cn(adminInput, "pr-10")}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                  aria-label={showNewPw ? "Sembunyikan password" : "Tampilkan password"}
+                  tabIndex={-1}
+                >
+                  {showNewPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPw ? "text" : "password"}
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  placeholder="Ulangi password baru"
+                  className={cn(adminInput, "pr-10")}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                  aria-label={showConfirmPw ? "Sembunyikan password" : "Tampilkan password"}
+                  tabIndex={-1}
+                >
+                  {showConfirmPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+            {resetError && <p className="text-sm text-red-600">{resetError}</p>}
+            {resetOk && <p className="text-sm text-teal-600">Password berhasil diubah.</p>}
+          </div>
+
+          <DialogFooter>
+            <button className={adminGhostBtn} onClick={() => setResetUser(null)} disabled={resetLoading}>
+              Cancel
+            </button>
+            <button className={adminPrimaryBtn} onClick={onResetSubmit} disabled={resetLoading}>
+              {resetLoading ? "Menyimpan..." : "Save Password"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

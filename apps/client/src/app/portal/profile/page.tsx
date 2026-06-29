@@ -17,6 +17,8 @@ import {
   Phone,
   Home,
   Save,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { changePassword, logout, updateProfile } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -109,6 +111,9 @@ export default function ProfilePage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState("");
   const [resetOk, setResetOk] = useState("");
+  const [showCp, setShowCp] = useState(false);
+  const [showNp, setShowNp] = useState(false);
+  const [showNpc, setShowNpc] = useState(false);
 
   async function loadProfile() {
     setLoading(true);
@@ -178,6 +183,9 @@ export default function ProfilePage() {
     setCp("");
     setNp("");
     setNpc("");
+    setShowCp(false);
+    setShowNp(false);
+    setShowNpc(false);
     setShowReset(true);
   };
 
@@ -505,39 +513,72 @@ export default function ProfilePage() {
                 <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <Lock className="size-3.5" /> Current Password
                 </label>
-                <input
-                  type="password"
-                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                  placeholder="Enter your current password"
-                  value={cp}
-                  onChange={(e) => setCp(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type={showCp ? "text" : "password"}
+                    className="h-10 w-full rounded-lg border border-slate-300 px-3 pr-10 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    placeholder="Enter your current password"
+                    value={cp}
+                    onChange={(e) => setCp(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCp((v) => !v)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showCp ? "Sembunyikan password" : "Tampilkan password"}
+                    tabIndex={-1}
+                  >
+                    {showCp ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <KeyRound className="size-3.5" /> New Password
                 </label>
-                <input
-                  type="password"
-                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                  placeholder="Enter your new password (min 8 chars)"
-                  value={np}
-                  onChange={(e) => setNp(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type={showNp ? "text" : "password"}
+                    className="h-10 w-full rounded-lg border border-slate-300 px-3 pr-10 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    placeholder="Enter your new password (min 8 chars)"
+                    value={np}
+                    onChange={(e) => setNp(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNp((v) => !v)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showNp ? "Sembunyikan password" : "Tampilkan password"}
+                    tabIndex={-1}
+                  >
+                    {showNp ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <Check className="size-3.5" /> Confirm New Password
                 </label>
-                <input
-                  type="password"
-                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                  placeholder="Confirm your new password"
-                  value={npc}
-                  onChange={(e) => setNpc(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type={showNpc ? "text" : "password"}
+                    className="h-10 w-full rounded-lg border border-slate-300 px-3 pr-10 text-sm transition focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    placeholder="Confirm your new password"
+                    value={npc}
+                    onChange={(e) => setNpc(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNpc((v) => !v)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 transition-colors hover:text-slate-600"
+                    aria-label={showNpc ? "Sembunyikan password" : "Tampilkan password"}
+                    tabIndex={-1}
+                  >
+                    {showNpc ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
