@@ -550,19 +550,7 @@ export default function CreateTicketPage() {
                     <option>Low</option>
                     <option>Normal</option>
                     <option>High</option>
-                  </select>
-                </Field>
-
-                <Field label="Severity">
-                  <select
-                    className={inputCls}
-                    value={severity}
-                    onChange={(e) => setSeverity(e.target.value)}
-                  >
-                    <option>N/A</option>
                     <option>Critical</option>
-                    <option>Major</option>
-                    <option>Minor</option>
                   </select>
                 </Field>
 

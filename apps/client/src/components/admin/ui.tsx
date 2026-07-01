@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* Input / select base style */
@@ -50,13 +48,6 @@ export function PageHead({
           {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
         </div>
       </div>
-      <Link
-        href="/admin"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 transition-colors hover:text-teal-700"
-      >
-        <ArrowLeft className="size-4" />
-        Back to Admin
-      </Link>
     </div>
   );
 }
